@@ -9,6 +9,7 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 import { buildCar } from './car/build.js';
+import { setLiveryColor } from './car/materials.js';
 import { TYRE_SQUASH } from './car/dims.js';
 import { PARTS, CATEGORIES, LAYERS } from './data/parts.js';
 import { createDimensions } from './dimensions.js';
@@ -499,6 +500,10 @@ const ui = initUI({
   },
   onCompound(c) {
     M.compound.color.set(c);
+    studio.floor.invalidate();
+  },
+  onPaint(c) {
+    setLiveryColor(c);
     studio.floor.invalidate();
   },
   onCam(name) {

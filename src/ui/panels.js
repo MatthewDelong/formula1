@@ -1,4 +1,5 @@
 import { PARTS, CATEGORIES, LAYERS, OVERVIEW } from '../data/parts.js';
+import { LIVERY_COLORS } from '../car/materials.js';
 
 const PRESET_LABELS = [
   ['assembled', 'Assembled'],
@@ -122,6 +123,22 @@ export function initUI(h) {
     ci = (ci + 1) % COMPOUNDS.length;
     showCompound();
     h.onCompound(COMPOUNDS[ci][1]);
+  });
+
+  /* paint colour: click to cycle */
+  const paint = $('paint');
+  let pi = 0;
+  const showPaint = () => {
+    const [name, hex] = LIVERY_COLORS[pi];
+    paint.querySelector('i').style.background = hex;
+    paint.title = `Paint: ${name}`;
+    paint.setAttribute('aria-label', `Paint colour: ${name}`);
+  };
+  showPaint();
+  paint.addEventListener('click', () => {
+    pi = (pi + 1) % LIVERY_COLORS.length;
+    showPaint();
+    h.onPaint(LIVERY_COLORS[pi][1]);
   });
 
   /* camera bar */
