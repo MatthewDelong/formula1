@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { latheZ, strut, cylinderBetween } from './geometry.js';
 import { addMesh } from './registry.js';
-import { FRONT_AXLE_X, REAR_AXLE_X, FRONT_WHEEL, REAR_WHEEL, RIM_R, FRONT_DISC_R, REAR_DISC_R, DISC_T } from './dims.js';
+import { FRONT_AXLE_X, REAR_AXLE_X, FRONT_WHEEL, REAR_WHEEL, RIM_R, FRONT_DISC_R, REAR_DISC_R, DISC_T, TYRE_SQUASH } from './dims.js';
 
 /* ------------------------------------------------------------------ */
 /* Wheel-local geometry (axis = z, outboard = +z, centred at origin)   */
 /* ------------------------------------------------------------------ */
 
-function tyreGeometry(r, w) {
+function tyreProfile(r, w) {
   const h = w / 2;
   const sw = r - RIM_R; // sidewall height
   const prof = [
@@ -28,8 +28,90 @@ function tyreGeometry(r, w) {
   ];
   // smooth the profile with a spline
   const curve = new THREE.SplineCurve(prof.map(([a, b]) => new THREE.Vector2(a, b)));
-  const pts = curve.getPoints(60).map((v) => [v.x, v.y]);
-  return latheZ(pts, 96);
+  return curve.getPoints(60).map((v) => [v.x, v.y]);
+}
+
+function tyreGeometry(r, w) {
+  return latheZ(tyreProfile(r, w), 96);
+}
+
+/**
+ * Thin band hugging the outboard sidewall, carrying the moulded lettering.
+ * u runs clockwise when viewed from outboard so the text reads correctly;
+ * `flipU` compensates for the mirrored right-hand corners.
+ */
+function sidewallTextBand(r, w, flipU) {
+  const sw = r - RIM_R;
+  const r0 = RIM_R + sw * 0.64;
+  const r1 = RIM_R + sw * 0.9;
+  // outboard half of the profile, sorted by radius, to look up z(r)
+  const side = tyreProfile(r, w).filter(([, z]) => z > 0).sort((a, b) => a[0] - b[0]);
+  const zAt = (rr) => {
+    for (let i = 0; i < side.length - 1; i++) {
+      if (rr >= side[i][0] && rr <= side[i + 1][0]) {
+        const t = (rr - side[i][0]) / (side[i + 1][0] - side[i][0] || 1);
+        return side[i][1] + (side[i + 1][1] - side[i][1]) * t;
+      }
+    }
+    return side[side.length - 1][1];
+  };
+  const seg = 256;
+  const rows = 4;
+  const pos = [];
+  const uv = [];
+  const idx = [];
+  for (let j = 0; j <= rows; j++) {
+    const rr = r0 + ((r1 - r0) * j) / rows;
+    const z = zAt(rr) + 0.0012;
+    for (let i = 0; i <= seg; i++) {
+      const th = (i / seg) * Math.PI * 2;
+      pos.push(rr * Math.cos(th), rr * Math.sin(th), z);
+      const u = i / seg;
+      uv.push(flipU ? u : 1 - u, j / rows);
+    }
+  }
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < seg; i++) {
+      const a = j * (seg + 1) + i;
+      const b = a + seg + 1;
+      idx.push(a, a + 1, b, a + 1, b + 1, b);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/**
+ * Load the tyre: flatten a contact patch at the bottom and let the lower
+ * sidewalls bulge outward a little, so the car visibly sits on its tyres.
+ */
+function squash(geo, r, w) {
+  const pos = geo.attributes.position;
+  const flat = -(r - TYRE_SQUASH);
+  const h = w / 2;
+  for (let i = 0; i < pos.count; i++) {
+    let y = pos.getY(i);
+    let z = pos.getZ(i);
+    const x = pos.getX(i);
+    // bulge ramps in over the bottom third of the tyre
+    const t = THREE.MathUtils.smoothstep(-y / r, 0.55, 1.0);
+    const side = THREE.MathUtils.smoothstep(Math.abs(z) / h, 0.55, 0.95);
+    z *= 1 + 0.045 * t * side;
+    if (y < flat) {
+      // squash toward the patch, keeping a slight rounded shoulder
+      y = flat - (y - flat) * -0.08;
+      const spread = 1 + 0.02 * (1 - THREE.MathUtils.smoothstep(Math.abs(x) / r, 0, 0.3));
+      z *= spread;
+    }
+    pos.setXYZ(i, x, y, z);
+  }
+  pos.needsUpdate = true;
+  geo.computeBoundingSphere();
+  return geo;
 }
 
 function compoundBand(r, w) {
@@ -91,7 +173,11 @@ function wheelCover(w) {
     [RIM_R - 0.02, h * 0.89],
     [RIM_R - 0.004, h * 0.9],
   ];
-  return latheZ(prof, 96);
+  const g = latheZ(prof, 96);
+  // planar UVs in metres so the carbon weave has a true physical scale
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) g.attributes.uv.setXY(i, p.getX(i), p.getY(i));
+  return g;
 }
 
 function wheelNut(w) {
@@ -129,11 +215,12 @@ function corner(reg, M, { key, front, left }) {
 
   // tyre
   const tyre = mk('tyre', 'tyres', 1.35, 0.3, 'wheels');
-  addMesh(tyre, tyreGeometry(W.r, W.w), M.rubber);
-  const tread = new THREE.CylinderGeometry(W.r + 0.0005, W.r + 0.0005, W.w * 0.6, 96, 1, true);
+  addMesh(tyre, squash(tyreGeometry(W.r, W.w), W.r, W.w), M.rubber);
+  const tread = new THREE.CylinderGeometry(W.r + 0.0005, W.r + 0.0005, W.w * 0.6, 192, 4, true);
   tread.rotateX(Math.PI / 2);
-  addMesh(tyre, tread, M.tread);
-  for (const g of compoundBand(W.r, W.w)) addMesh(tyre, g, M.compound, { cast: false });
+  addMesh(tyre, squash(tread, W.r, W.w), M.tread);
+  for (const g of compoundBand(W.r, W.w)) addMesh(tyre, squash(g, W.r, W.w), M.compound, { cast: false });
+  addMesh(tyre, squash(sidewallTextBand(W.r, W.w, !left), W.r, W.w), M.tyreText, { cast: false });
 
   // wheel cover (mandatory annular disc)
   const cover = mk('wheel-cover', 'wheel-covers', 1.75, 0.4, 'wheels');

@@ -150,28 +150,92 @@ function plankTexture() {
   return t;
 }
 
+/** Tyre tread: circumferential scuffing and rubber pick-up (roughness + tint). */
+function treadTextures() {
+  const w = 1024;
+  const h = 128;
+  const [c, g] = canvas(w);
+  c.height = h;
+  g.fillStyle = '#808080';
+  g.fillRect(0, 0, w, h);
+  // streaks run around the tyre (u), varying across the tread (v)
+  for (let i = 0; i < 2600; i++) {
+    const v = 90 + Math.random() * 90;
+    g.fillStyle = `rgba(${v},${v},${v},${0.05 + Math.random() * 0.15})`;
+    g.fillRect(Math.random() * w, Math.random() * h, 20 + Math.random() * 220, 1 + Math.random() * 1.5);
+  }
+  // a few darker, glossier "graining" bands
+  for (let i = 0; i < 9; i++) {
+    g.fillStyle = `rgba(40,40,40,${0.15 + Math.random() * 0.2})`;
+    g.fillRect(0, Math.random() * h, w, 1 + Math.random() * 3);
+  }
+  const rough = new THREE.CanvasTexture(c);
+  rough.wrapS = rough.wrapT = THREE.RepeatWrapping;
+  rough.anisotropy = 8;
+  return rough;
+}
+
+/**
+ * Moulded sidewall lettering (alpha mask). u runs around the tyre, v runs
+ * from the inner to the outer radius of the lettering band.
+ */
+function sidewallTextTexture() {
+  const w = 4096;
+  const h = 160;
+  const [c, g] = canvas(w);
+  c.height = h;
+  const draw = () => {
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = '#fff';
+    g.textBaseline = 'middle';
+    g.textAlign = 'center';
+    for (const [i, big] of [[0, true], [1, false], [2, true], [3, false]]) {
+      const x = (i + 0.5) * (w / 4);
+      if (big) {
+        g.font = `italic 800 ${h * 0.78}px "Inter Tight", "Arial Black", sans-serif`;
+        g.fillText('RACING SLICK', x, h * 0.53);
+      } else {
+        g.font = `600 ${h * 0.4}px "Inter Tight", Arial, sans-serif`;
+        g.fillText('F1 · 2026 · 18"', x, h * 0.53);
+      }
+    }
+    tex.needsUpdate = true;
+  };
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.anisotropy = 8;
+  draw();
+  document.fonts?.ready.then(draw);
+  return tex;
+}
+
 /* ------------------------------------------------------------------ */
 /* Livery material                                                    */
 /* ------------------------------------------------------------------ */
 
 // The livery colour is computed in the fragment shader from the car-space
 // position of each fragment, so the paint scheme is continuous across
-// separate body panels (nose, tub, sidepods, engine cover) and can be
-// recoloured live via uniforms. Geometry is authored in car space, so
-// the object-space position equals the assembled car-space position.
-export const liveryUniforms = {
-  uPrimary: { value: new THREE.Color('#e9ebef') },
-  uAccent: { value: new THREE.Color('#00a7b5') },
-  uDark: { value: new THREE.Color('#141518') },
+// separate body panels (nose, tub, sidepods, engine cover). Geometry is
+// authored in car space, so the object-space position equals the assembled
+// car-space position.
+
+// The car's single, fixed livery: plain deep dark red paint (undersides are
+// bare carbon).
+const LIVERY = { primary: '#4a0710', dark: '#0d0b0c' };
+
+const liveryUniforms = {
+  uPrimary: { value: new THREE.Color(LIVERY.primary) },
+  uDark: { value: new THREE.Color(LIVERY.dark) },
 };
 
 function makeLiveryMaterial() {
+  // satin paint: mostly matte, with a faint, soft clear-coat sheen
   const mat = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
-    metalness: 0.15,
-    roughness: 0.32,
-    clearcoat: 1,
-    clearcoatRoughness: 0.06,
+    metalness: 0,
+    roughness: 0.58,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.42,
     side: THREE.DoubleSide,
   });
   mat.userData.livery = true;
@@ -185,23 +249,15 @@ function makeLiveryMaterial() {
         '#include <common>',
         `#include <common>
          varying vec3 vLivPos;
-         uniform vec3 uPrimary; uniform vec3 uAccent; uniform vec3 uDark;
+         uniform vec3 uPrimary; uniform vec3 uDark;
          vec3 liveryColor(vec3 p, vec3 n) {
-           float z = abs(p.z);
            vec3 col = uPrimary;
-           float noseTip = smoothstep(2.40, 2.41, p.x);
-           // dark lower body line, sweeping up toward the rear; dark undersides
-           float lower = 0.30 + 0.035 * (p.x - 0.4);
-           float dark = (1.0 - smoothstep(lower - 0.004, lower + 0.004, p.y)) * (1.0 - smoothstep(1.7, 1.8, p.x));
-           dark = max(dark, 1.0 - smoothstep(-0.7, -0.45, n.y));
-           // accent swoosh along the flanks (side-facing surfaces only)
-           float band = 0.47 + 0.10 * (p.x - 0.2) - 0.03 * sin(p.x * 1.6);
-           float accent = smoothstep(band - 0.004, band, p.y) * (1.0 - smoothstep(band + 0.034, band + 0.038, p.y));
-           accent *= step(-1.3, p.x) * step(p.x, 1.2) * step(0.14, z);
-           accent *= smoothstep(0.45, 0.7, abs(n.z));
-           accent = max(accent, noseTip);
-           col = mix(col, uAccent, accent);
-           col = mix(col, uDark, dark * (1.0 - noseTip));
+           // downward-facing undersides are left as dark bare carbon
+           float dark = 1.0 - smoothstep(-0.7, -0.45, n.y);
+           col = mix(col, uDark, dark);
+           // shut line where the removable nose meets the survival cell
+           float seam = 1.0 - smoothstep(0.0006, 0.0016, abs(p.x - 1.80));
+           col *= 1.0 - 0.55 * seam;
            return col;
          }`
       )
@@ -219,16 +275,18 @@ function makeLiveryMaterial() {
 
 export function createMaterials() {
   const carbonTex = carbonTextures();
+  const treadRough = treadTextures();
+  treadRough.repeat.set(3, 1);
 
   const carbon = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     map: carbonTex.map,
     bumpMap: carbonTex.bump,
     bumpScale: 0.35,
-    metalness: 0.2,
-    roughness: 0.42,
+    metalness: 0.08,
+    roughness: 0.38,
     clearcoat: 1,
-    clearcoatRoughness: 0.08,
+    clearcoatRoughness: 0.05,
     side: THREE.DoubleSide,
   });
   const carbonMatte = carbon.clone();
@@ -241,8 +299,9 @@ export function createMaterials() {
     carbonMatte,
     satinBlack: new THREE.MeshPhysicalMaterial({ color: 0x0f1012, roughness: 0.45, metalness: 0.1, clearcoat: 0.6, clearcoatRoughness: 0.3, side: THREE.DoubleSide }),
     inlet: new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.9, side: THREE.DoubleSide }),
-    rubber: new THREE.MeshPhysicalMaterial({ color: 0x1b1b1d, roughness: 0.82, metalness: 0, sheen: 0.3, sheenColor: new THREE.Color(0x333333), side: THREE.DoubleSide }),
-    tread: new THREE.MeshPhysicalMaterial({ color: 0x202022, roughness: 0.6, metalness: 0, side: THREE.DoubleSide }),
+    rubber: new THREE.MeshPhysicalMaterial({ color: 0x19191b, roughness: 0.78, metalness: 0, sheen: 0.12, sheenRoughness: 0.6, sheenColor: new THREE.Color(0x3a3a3a), side: THREE.DoubleSide }),
+    tread: new THREE.MeshPhysicalMaterial({ color: 0x1c1c1e, roughness: 1, roughnessMap: treadRough, metalness: 0, side: THREE.DoubleSide }),
+    tyreText: new THREE.MeshStandardMaterial({ color: 0xdadada, alphaMap: sidewallTextTexture(), alphaTest: 0.45, roughness: 0.62, side: THREE.DoubleSide }),
     rim: new THREE.MeshPhysicalMaterial({ color: 0x2a2c30, roughness: 0.35, metalness: 0.85, clearcoat: 0.5, side: THREE.DoubleSide }),
     titanium: new THREE.MeshPhysicalMaterial({ color: 0x9a9ca2, roughness: 0.3, metalness: 1, side: THREE.DoubleSide }),
     aluminium: new THREE.MeshPhysicalMaterial({ color: 0xc4c8ce, roughness: 0.28, metalness: 1, side: THREE.DoubleSide }),
@@ -264,7 +323,7 @@ export function createMaterials() {
     mirror: new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, metalness: 1, side: THREE.DoubleSide }),
     visor: new THREE.MeshPhysicalMaterial({ color: 0x0a0c14, roughness: 0.05, metalness: 0.9, clearcoat: 1, side: THREE.DoubleSide }),
     helmet: new THREE.MeshPhysicalMaterial({ color: 0xf2f2f2, roughness: 0.25, metalness: 0.2, clearcoat: 1, side: THREE.DoubleSide }),
-    helmetAccent: new THREE.MeshPhysicalMaterial({ color: 0x00a7b5, roughness: 0.25, metalness: 0.3, clearcoat: 1, side: THREE.DoubleSide }),
+    helmetAccent: new THREE.MeshPhysicalMaterial({ color: 0x8e0f1d, roughness: 0.25, metalness: 0.3, clearcoat: 1, side: THREE.DoubleSide }),
     suit: new THREE.MeshPhysicalMaterial({ color: 0x2b2f36, roughness: 0.8, sheen: 0.6, sheenColor: new THREE.Color(0x667080), side: THREE.DoubleSide }),
     padding: new THREE.MeshStandardMaterial({ color: 0x1a1b1e, roughness: 0.95, side: THREE.DoubleSide }),
     lightRed: new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0xff1020, emissiveIntensity: 2.2, roughness: 0.3 }),

@@ -19,7 +19,7 @@ npm run build    # static build in dist/
 - **X-ray** the bodywork and survival cell to see the fuel cell, battery and engine in place.
 - **Dimensions**: overlay the key regulated measurements.
 - **Active aero**: switch Corner Mode / Straight Mode to animate the 2026 movable wings.
-- Change the **tyre compound** and the (generic) **livery**.
+- Change the **tyre compound**.
 
 ## Code map
 

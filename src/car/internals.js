@@ -211,22 +211,25 @@ export function buildInternals(reg, M) {
 
   /* Radiators in each sidepod */
   const rad = reg.part({ id: 'radiator-L', info: 'radiators', layer: 'pu', explode: [0, 0.45, 0.55], delay: 0.35 });
-  const core = new THREE.BoxGeometry(0.46, 0.3, 0.05);
+  // mounted high and inboard, clear of the sidepod undercut
+  const RY = 0.355;
+  const RZ = 0.42;
+  const core = new THREE.BoxGeometry(0.44, 0.24, 0.05);
   core.rotateX(0.32);
-  core.translate(0.1, 0.31, 0.47);
+  core.translate(0.1, RY, RZ);
   addMesh(rad, core, M.radiator);
-  for (const dy of [0.155, -0.155]) {
-    const tank = new THREE.BoxGeometry(0.48, 0.03, 0.06);
+  for (const dy of [0.135, -0.135]) {
+    const tank = new THREE.BoxGeometry(0.46, 0.03, 0.06);
     tank.rotateX(0.32);
-    tank.translate(0.1, 0.31 + dy * Math.cos(0.32), 0.47 - dy * Math.sin(0.32));
+    tank.translate(0.1, RY + dy * Math.cos(0.32), RZ - dy * Math.sin(0.32));
     addMesh(rad, tank, M.aluminium);
   }
-  addMesh(rad, tubeThrough([[-0.12, 0.3, 0.45], [-0.3, 0.3, 0.33], [-0.46, 0.34, 0.2]], 0.016), M.aluminium);
+  addMesh(rad, tubeThrough([[-0.12, 0.38, 0.4], [-0.3, 0.34, 0.31], [-0.46, 0.34, 0.2]], 0.016), M.aluminium);
   reg.mirror(rad, 'radiator-R');
 
   /* Side impact structures (upper and lower) */
   const sis = reg.part({ id: 'sis-L', info: 'side-impact', layer: 'chassis', explode: [0, -0.1, 0.8], delay: 0.3 });
-  for (const [x, y, z1] of [[0.42, 0.5, 0.6], [0.3, 0.21, 0.58]]) {
+  for (const [x, y, z1] of [[0.42, 0.5, 0.6], [0.3, 0.21, 0.47]]) {
     const g = new THREE.CylinderGeometry(0.035, 0.04, z1 - 0.27, 20);
     g.rotateX(Math.PI / 2);
     g.scale(1.5, 0.75, 1);

@@ -1,16 +1,18 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 import { buildCar } from './car/build.js';
-import { liveryUniforms } from './car/materials.js';
+import { TYRE_SQUASH } from './car/dims.js';
 import { PARTS, CATEGORIES, LAYERS } from './data/parts.js';
 import { createDimensions } from './dimensions.js';
+import { createStudio } from './studio.js';
 import { Callout } from './ui/callout.js';
 import { initUI } from './ui/panels.js';
 
@@ -23,23 +25,20 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 0.9;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+// the lights are static, so the shadow map is only redrawn when the car changes
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 stage.appendChild(renderer.domElement);
 
 const labelRenderer = new CSS2DRenderer({ element: document.getElementById('labels') });
 labelRenderer.setSize(window.innerWidth, window.innerHeight);
 
-const BG = 0x0b0d11;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(BG);
-scene.fog = new THREE.Fog(BG, 10, 24);
-
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.85;
+const studio = createStudio(renderer, scene);
 
 const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 0.05, 100);
 camera.position.set(5.6, 2.3, 5.2);
@@ -56,70 +55,6 @@ controls.minDistance = 1.2;
 controls.maxDistance = 16;
 controls.maxPolarAngle = Math.PI * 0.495;
 controls.update();
-
-/* Lights */
-scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x1a1c20, 0.45));
-const key = new THREE.DirectionalLight(0xffffff, 2.4);
-key.position.set(4, 7, 3);
-key.castShadow = true;
-key.shadow.mapSize.set(2048, 2048);
-key.shadow.camera.left = -4;
-key.shadow.camera.right = 4;
-key.shadow.camera.top = 4;
-key.shadow.camera.bottom = -4;
-key.shadow.camera.near = 1;
-key.shadow.camera.far = 20;
-key.shadow.bias = -0.0004;
-key.shadow.normalBias = 0.02;
-key.shadow.radius = 4;
-scene.add(key);
-const rim = new THREE.DirectionalLight(0x9fd8ff, 1.2);
-rim.position.set(-5, 3, -4);
-scene.add(rim);
-const fill = new THREE.DirectionalLight(0xffe8d0, 0.5);
-fill.position.set(-2, 2, 6);
-scene.add(fill);
-
-/* Studio floor */
-function radialTexture(inner, outer, stops) {
-  const c = document.createElement('canvas');
-  c.width = c.height = 512;
-  const g = c.getContext('2d');
-  const grd = g.createRadialGradient(256, 256, inner, 256, 256, outer);
-  stops.forEach(([o, col]) => grd.addColorStop(o, col));
-  g.fillStyle = grd;
-  g.fillRect(0, 0, 512, 512);
-  return new THREE.CanvasTexture(c);
-}
-const floorMat = new THREE.MeshStandardMaterial({
-  color: 0x0e1014,
-  roughness: 0.7,
-  metalness: 0.0,
-  transparent: true,
-  alphaMap: radialTexture(0, 256, [[0, '#fff'], [0.55, '#fff'], [1, '#000']]),
-});
-const ground = new THREE.Mesh(new THREE.CircleGeometry(12, 96), floorMat);
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-// soft contact shadow blob
-const blob = new THREE.Mesh(
-  new THREE.PlaneGeometry(6.2, 2.6),
-  new THREE.MeshBasicMaterial({
-    map: radialTexture(0, 256, [[0, 'rgba(0,0,0,0.75)'], [0.6, 'rgba(0,0,0,0.35)'], [1, 'rgba(0,0,0,0)']]),
-    transparent: true,
-    depthWrite: false,
-  }),
-);
-blob.rotation.x = -Math.PI / 2;
-blob.position.y = 0.002;
-scene.add(blob);
-// subtle floor grid
-const grid = new THREE.GridHelper(24, 48, 0x2a2f38, 0x1b1f26);
-grid.material.transparent = true;
-grid.material.opacity = 0.35;
-grid.position.y = 0.001;
-scene.add(grid);
 
 /* ------------------------------------------------------------------ */
 /* Car                                                                */
@@ -159,6 +94,20 @@ const rt = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { 
 const composer = new EffectComposer(renderer, rt);
 composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 composer.addPass(new RenderPass(scene, camera));
+// ambient occlusion: grounds the car and darkens crevices (sidepod undercut, wheel wells)
+const gtao = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
+// body panels are lofted with mixed winding and rely on DoubleSide
+gtao.normalMaterial.side = THREE.DoubleSide;
+// AO is soft and low-frequency, so compute it at half resolution (about a
+// quarter of the cost); the blend step upsamples it over the full-res image
+const GTAO_SCALE = 0.5;
+const gtaoSetSize = gtao.setSize.bind(gtao);
+gtao.setSize = (w, h) => gtaoSetSize(Math.max(1, Math.round(w * GTAO_SCALE)), Math.max(1, Math.round(h * GTAO_SCALE)));
+gtao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 1, scale: 1.2, samples: 16 });
+gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+gtao.blendIntensity = 0.9;
+gtao.enabled = !window.matchMedia('(pointer: coarse)').matches; // too heavy for most phones
+composer.addPass(gtao);
 const outline = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera);
 outline.edgeStrength = 5;
 outline.edgeGlow = 0.6;
@@ -167,6 +116,23 @@ outline.visibleEdgeColor.set('#ffffff');
 outline.hiddenEdgeColor.set('#3a4452');
 composer.addPass(outline);
 composer.addPass(new OutputPass());
+// final grade in display space: gentle vignette + dithering to hide banding in the dark falloff
+const grade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uAspect: { value: window.innerWidth / window.innerHeight } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float uAspect; varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec2 d = (vUv - 0.5) * vec2(uAspect, 1.0);
+      float v = smoothstep(1.25, 0.35, length(d));
+      c.rgb *= mix(0.55, 1.0, v);
+      c.rgb += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
+      gl_FragColor = c;
+    }`,
+});
+composer.addPass(grade);
 
 /* ------------------------------------------------------------------ */
 /* State                                                              */
@@ -264,6 +230,9 @@ function refreshMaterials() {
   outline.selectedObjects = sel;
   const col = state.categoryHover ? CATEGORIES[state.categoryHover].color : CATEGORIES[PARTS[state.hoverInfo ?? state.pinned]?.cat]?.color;
   outline.visibleEdgeColor.set(col ?? '#ffffff');
+  studio.floor.invalidate();
+  renderer.shadowMap.needsUpdate = true; // x-ray toggles shadow casting
+  requestRender();
 }
 
 /* ------------------------------------------------------------------ */
@@ -474,6 +443,7 @@ const ui = initUI({
   },
   onDims(v) {
     dims.group.visible = v;
+    studio.floor.invalidate();
     if (v && state.explodeTarget > 0) {
       state.explodeTarget = 0;
       ui.sync();
@@ -489,12 +459,7 @@ const ui = initUI({
   },
   onCompound(c) {
     M.compound.color.set(c);
-  },
-  onLivery(l) {
-    liveryUniforms.uPrimary.value.set(l.primary);
-    liveryUniforms.uAccent.value.set(l.accent);
-    liveryUniforms.uDark.value.set(l.dark);
-    M.helmetAccent.color.set(l.accent);
+    studio.floor.invalidate();
   },
   onCam(name) {
     const c = CAMS[name];
@@ -549,6 +514,16 @@ const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const clock = new THREE.Clock();
 const tmp = new THREE.Vector3();
 let frame = 0;
+let lastSig = NaN;
+
+/*
+ * Render on demand: the scene is only drawn when something visible changed
+ * (camera, animation, hover, UI). An idle view costs no GPU time at all.
+ */
+let pendingFrames = 2;
+function requestRender(frames = 1) {
+  pendingFrames = Math.max(pendingFrames, frames);
+}
 
 function update(dt) {
   // explode
@@ -556,8 +531,7 @@ function update(dt) {
   state.explode += (state.explodeTarget - state.explode) * k;
   if (Math.abs(state.explode - state.explodeTarget) < 1e-4) state.explode = state.explodeTarget;
   const lift = ease(Math.min(1, state.explode * 1.6)) * 1.0;
-  car.position.y = lift;
-  blob.material.opacity = 1 - state.explode * 0.6;
+  car.position.y = lift - TYRE_SQUASH;
   dims.setOpacity(1 - Math.min(1, state.explode * 10));
 
   for (const p of parts) {
@@ -580,9 +554,20 @@ function update(dt) {
 
   // active aero
   state.aeroT += (state.aeroTarget - state.aeroT) * (1 - Math.exp(-dt * 6));
+  if (Math.abs(state.aeroT - state.aeroTarget) < 1e-4) state.aeroT = state.aeroTarget;
   const a = ease(state.aeroT);
   aero.frontWing.flapPivots.forEach((pv, i) => (pv.rotation.z = a * aero.frontWing.flapAngles[i]));
   aero.rearWing.flapPivots.forEach((pv, i) => (pv.rotation.z = a * aero.rearWing.flapAngles[i]));
+
+  // refresh contact shadows / floor reflection only while the car is changing
+  let sig = state.explode * 7.1 + state.aeroT * 3.3;
+  for (const p of parts) sig += p.userData.hideT;
+  if (sig !== lastSig) {
+    lastSig = sig;
+    studio.invalidate();
+    renderer.shadowMap.needsUpdate = true;
+    requestRender();
+  }
 
   // camera tween
   if (camTween) {
@@ -591,6 +576,7 @@ function update(dt) {
     camera.position.lerpVectors(camTween.p0, camTween.p1, e);
     controls.target.lerpVectors(camTween.t0, camTween.t1, e);
     if (camTween.t >= 1) camTween = null;
+    requestRender();
   }
   controls.update();
 
@@ -608,13 +594,26 @@ function update(dt) {
   callout.update();
 }
 
-function loop() {
+// Cap drawing at ~60 fps: high-refresh displays would otherwise double the GPU load
+const MIN_FRAME_MS = 1000 / 61;
+let lastRenderAt = 0;
+
+function render() {
+  studio.update([dims.group]);
+  composer.render();
+  labelRenderer.render(scene, camera);
+}
+
+function loop(now) {
+  requestAnimationFrame(loop);
   const dt = Math.min(0.05, clock.getDelta());
   frame++;
   update(dt);
-  composer.render();
-  labelRenderer.render(scene, camera);
-  requestAnimationFrame(loop);
+  if (pendingFrames > 0 && now - lastRenderAt >= MIN_FRAME_MS) {
+    pendingFrames--;
+    lastRenderAt = now;
+    render();
+  }
 }
 
 window.addEventListener('resize', () => {
@@ -623,27 +622,35 @@ window.addEventListener('resize', () => {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
-  composer.setSize(w, h);
-  outline.setSize(w, h);
+  composer.setSize(w, h); // also resizes every pass at the current pixel ratio
   labelRenderer.setSize(w, h);
+  grade.uniforms.uAspect.value = w / h;
+  studio.setSize(w, h);
+  requestRender();
 });
 
 // Mark picks from camera orbit changes as dirty so the hover target stays accurate
-controls.addEventListener('change', () => (pointerDirty = true));
+controls.addEventListener('change', () => {
+  pointerDirty = true;
+  requestRender();
+});
+// any UI interaction (compound, toggles…) may change the picture
+for (const type of ['input', 'change', 'click', 'keydown']) document.addEventListener(type, () => requestRender(2), true);
+// canvas textures (tyre lettering, race numbers) redraw once the web fonts load
+document.fonts?.ready.then(() => requestRender());
 
 refreshMaterials();
-requestAnimationFrame(() => {
-  loop();
+requestAnimationFrame((now) => {
+  loop(now);
   document.getElementById('loading').classList.add('done');
 });
 
 // handy for debugging in the console
 window.__f1 = {
-  THREE, scene, car, reg, state, camera, controls,
+  THREE, scene, car, reg, state, camera, controls, studio, renderer, composer,
   // advance the simulation deterministically (useful when rAF is throttled)
   advance(seconds = 1) {
     for (let t = 0; t < seconds; t += 1 / 60) update(1 / 60);
-    composer.render();
-    labelRenderer.render(scene, camera);
+    render();
   },
 };

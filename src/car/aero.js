@@ -110,10 +110,12 @@ export function buildRearWing(reg, M) {
   const rw = reg.part({ id: 'rear-wing', info: 'rear-wing', layer: 'aero', explode: [-1.2, 0.6, 0], delay: 0.15 });
   addMesh(rw, wingElement(mirrorSections(RW_MAIN), { steps: 5, around: 32 }), M.carbon);
 
+  // 2022+ style endplate: short and swept, its lower leading edge curving
+  // into the mainplane tip rather than running down toward the floor
   const ep = smoothOutline(
     [
-      [-1.95, 0.68], [-1.94, 0.86], [-1.99, 0.95], [-2.1, 0.99], [-2.36, 0.995],
-      [-2.46, 0.955], [-2.475, 0.78], [-2.42, 0.63], [-2.26, 0.57], [-2.06, 0.6],
+      [-1.99, 0.8], [-1.985, 0.88], [-2.03, 0.955], [-2.14, 0.99], [-2.36, 0.998],
+      [-2.455, 0.965], [-2.47, 0.83], [-2.42, 0.735], [-2.28, 0.7], [-2.1, 0.72],
     ],
     90,
   );

@@ -133,7 +133,10 @@ const sgnPow = (v, p) => Math.sign(v) * Math.pow(Math.abs(v), p);
  * Superellipse ring in the YZ plane at station x.
  * s: { x, cy, cz, w (half width), hT (height above cy), hB (height below cy),
  *      n (squareness, 2 = ellipse), nB (optional squareness for the lower half),
- *      tw (top width factor: <1 narrows the top, giving a tapered "tub") }
+ *      tw (top width factor: <1 narrows the top, giving a tapered "tub"),
+ *      bw (bottom width factor: <1 tucks the lower half in, e.g. an undercut),
+ *      tilt (shear dy/dz about cz: <0 slopes the top down outboard, e.g. a
+ *            downwash sidepod) }
  */
 export function superRing(s, count = 48) {
   const pts = [];
@@ -149,9 +152,9 @@ export function superRing(s, count = 48) {
     const e = 2 / (upper ? n : nB);
     // width factor blends between bottom and top width
     const wf = upper ? 1 + (tw - 1) * Math.pow(sn, 1.5) : 1 + (bw - 1) * Math.pow(-sn, 1.5);
-    const z = (s.cz ?? 0) + s.w * wf * sgnPow(c, e);
-    const y = s.cy + (upper ? s.hT : s.hB) * sgnPow(sn, e);
-    pts.push(new THREE.Vector3(s.x, y, z));
+    const dz = s.w * wf * sgnPow(c, e);
+    const y = s.cy + (upper ? s.hT : s.hB) * sgnPow(sn, e) + (s.tilt ?? 0) * dz;
+    pts.push(new THREE.Vector3(s.x, y, (s.cz ?? 0) + dz));
   }
   return pts;
 }
@@ -342,7 +345,7 @@ export function superPoint(s, th) {
   const upper = sn >= 0;
   const e = 2 / (upper ? n : nB);
   const wf = upper ? 1 + (tw - 1) * Math.pow(sn, 1.5) : 1 + (bw - 1) * Math.pow(-sn, 1.5);
-  const z = (s.cz ?? 0) + s.w * wf * sgnPow(c, e);
-  const y = s.cy + (upper ? s.hT : s.hB) * sgnPow(sn, e);
-  return new THREE.Vector3(s.x, y, z);
+  const dz = s.w * wf * sgnPow(c, e);
+  const y = s.cy + (upper ? s.hT : s.hB) * sgnPow(sn, e) + (s.tilt ?? 0) * dz;
+  return new THREE.Vector3(s.x, y, (s.cz ?? 0) + dz);
 }

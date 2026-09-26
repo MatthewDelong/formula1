@@ -1,5 +1,5 @@
 :root {
-  --bg: #0b0d11;
+  --bg: #07080a; /* matches STUDIO_BG in src/studio.js */
   --panel: rgba(17, 20, 26, 0.78);
   --panel-solid: #12151b;
   --line: rgba(255, 255, 255, 0.08);

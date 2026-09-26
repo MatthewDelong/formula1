@@ -17,14 +17,6 @@ const COMPOUNDS = [
   ['Wet', '#0067ad'],
 ];
 
-const LIVERIES = [
-  { name: 'Pearl', primary: '#e9ebef', accent: '#00a7b5', dark: '#141518' },
-  { name: 'Graphite', primary: '#2a2d33', accent: '#ff7a1a', dark: '#0e0f11' },
-  { name: 'Racing', primary: '#0f5c3a', accent: '#e8d9a8', dark: '#0c0f0d' },
-  { name: 'Crimson', primary: '#b3121f', accent: '#f2f2f2', dark: '#121212' },
-  { name: 'Cobalt', primary: '#1c3faa', accent: '#ffcc00', dark: '#0b0e18' },
-];
-
 const $ = (id) => document.getElementById(id);
 
 export function initUI(h) {
@@ -113,11 +105,6 @@ export function initUI(h) {
     });
   };
   swatches($('compounds'), COMPOUNDS.map(([name, c]) => ({ name, bg: c, c })), (it) => h.onCompound(it.c));
-  swatches(
-    $('liveries'),
-    LIVERIES.map((l) => ({ ...l, bg: `linear-gradient(135deg, ${l.primary} 0 55%, ${l.accent} 55% 70%, ${l.dark} 70%)` })),
-    (it) => h.onLivery(it),
-  );
 
   /* camera bar */
   const cams = $('cams');

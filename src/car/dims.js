@@ -24,3 +24,7 @@ export const RW_HALF_SPAN = 0.5;
 export const EXHAUST_EXIT = { x: REAR_AXLE_X - 0.395, y: 0.455, r: 0.05 };
 
 export const ROLL_HOOP_TOP = REF_Y + 0.968; // structure required at Z = 968 mm
+
+// Tyres are modelled with a loaded, flattened contact patch; the car is
+// lowered by this much so the patch sits exactly on the ground.
+export const TYRE_SQUASH = 0.008;
