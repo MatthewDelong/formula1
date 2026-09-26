@@ -219,14 +219,26 @@ function sidewallTextTexture() {
 // authored in car space, so the object-space position equals the assembled
 // car-space position.
 
-// The car's single, fixed livery: plain deep dark red paint (undersides are
-// bare carbon).
-const LIVERY = { primary: '#4a0710', dark: '#0d0b0c' };
+// Plain, deep matte paint (undersides are bare carbon). The primary colour
+// defaults to dark red and can be swapped at runtime with setLiveryColor().
+export const LIVERY_COLORS = [
+  ['Red', '#4a0710'],
+  ['Blue', '#0e1f42'],
+  ['Green', '#10301f'],
+  ['Pink', '#55163a'],
+  ['Purple', '#2c1446'],
+];
+const LIVERY = { primary: LIVERY_COLORS[0][1], dark: '#0d0b0c' };
 
 const liveryUniforms = {
   uPrimary: { value: new THREE.Color(LIVERY.primary) },
   uDark: { value: new THREE.Color(LIVERY.dark) },
 };
+
+/** Repaint every livery panel (the uniform is shared by all livery materials). */
+export function setLiveryColor(hex) {
+  liveryUniforms.uPrimary.value.set(hex);
+}
 
 function makeLiveryMaterial() {
   // satin paint: mostly matte, with a faint, soft clear-coat sheen

@@ -92,6 +92,8 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-
 #compound .names { display: grid; }
 #compound .names span { grid-area: 1 / 1; text-align: left; visibility: hidden; }
 #compound .names span.on { visibility: visible; }
+#paint { padding: 0 9px; }
+#paint i { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.12); transition: background 0.2s; }
 #compound i { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.2); transition: background 0.2s; }
 
 .explode { display: flex; align-items: center; gap: 10px; height: 30px; padding: 0 6px 0 10px; }
