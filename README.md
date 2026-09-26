@@ -31,7 +31,7 @@ npm run build    # static build in dist/
 | `src/car/registry.js` | Part registry (explode offsets, layers, mirroring) |
 | `src/data/parts.js` | Rules content, component categories and layers |
 | `src/main.js` | Scene, post-processing, picking, animation |
-| `src/ui/` | Callout card with leader line, and the side panels |
+| `src/ui/` | Callout card with leader line, and the top / bottom toolbars |
 | `src/dimensions.js` | Dimension overlay |
 
 ## Sources

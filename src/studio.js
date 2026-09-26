@@ -13,7 +13,7 @@ import { VerticalBlurShader } from 'three/examples/jsm/shaders/VerticalBlurShade
  *   - a faint, blurred floor reflection.
  */
 
-export const STUDIO_BG = 0x07080a;
+export const STUDIO_BG = 0x080808;
 
 /* ------------------------------------------------------------------ */
 /* Environment: black room with a few soft boxes                       */
@@ -25,13 +25,13 @@ function studioEnvironment(renderer) {
   const box = new THREE.BoxGeometry(1, 1, 1);
 
   // dark room so reflections of "nothing" stay deep
-  const room = new THREE.Mesh(box, new THREE.MeshBasicMaterial({ color: 0x050506, side: THREE.BackSide }));
+  const room = new THREE.Mesh(box, new THREE.MeshBasicMaterial({ color: 0x060505, side: THREE.BackSide }));
   room.scale.set(30, 14, 30);
   room.position.y = 6;
   env.add(room);
 
   // dim floor, so lower surfaces pick up a hint of ground bounce
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x16171a) }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x181715) }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.99;
   env.add(ground);
@@ -48,11 +48,11 @@ function studioEnvironment(renderer) {
   // long overhead soft box: the signature highlight running down the car
   softbox(9, 2.4, 14, [0, 5.5, 0], [0, 0, 0]);
   // side strip lights for crisp flank highlights
-  softbox(7, 0.5, 10, [0, 1.8, 5.5], [0, 1.2, 0], 0xf4f7ff);
-  softbox(7, 0.5, 10, [0, 1.8, -5.5], [0, 1.2, 0], 0xf4f7ff);
-  // front/rear kickers, warm and cool
+  softbox(7, 0.5, 10, [0, 1.8, 5.5], [0, 1.2, 0], 0xfaf7f2);
+  softbox(7, 0.5, 10, [0, 1.8, -5.5], [0, 1.2, 0], 0xfaf7f2);
+  // front/rear kickers, both near-neutral
   softbox(2.5, 1.4, 5, [7, 1.6, 2], [0, 0.4, 0], 0xfff1e0);
-  softbox(2.5, 1.4, 4, [-7, 2.2, -2], [0, 0.4, 0], 0xdfeaff);
+  softbox(2.5, 1.4, 4, [-7, 2.2, -2], [0, 0.4, 0], 0xf2eee8);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   const tex = pmrem.fromScene(env, 0.02).texture;
@@ -178,7 +178,7 @@ function createFloor(contact, bg) {
     uBg: { value: new THREE.Color(bg) },
     uFade: { value: new THREE.Vector2(2.6, 8.5) },
   };
-  const mat = new THREE.MeshStandardMaterial({ color: 0x2c2d31, roughness: 0.72, metalness: 0.0, envMapIntensity: 0.05 });
+  const mat = new THREE.MeshStandardMaterial({ color: 0x2e2d2a, roughness: 0.72, metalness: 0.0, envMapIntensity: 0.05 });
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
@@ -289,10 +289,16 @@ export function createStudio(renderer, scene) {
   // overhead key: a soft pool of light that only reaches the car
   const key = spot(0xffffff, 210, [0.6, 8.5, 1.2], [0, 0, 0], { angle: 0.44, penumbra: 0.9, shadow: true });
   // rim / kicker lights to separate the silhouette from the void
-  const rimL = spot(0xcfe0ff, 120, [-6.5, 3.2, -4.5], [0.2, 0.4, 0], { angle: 0.32, penumbra: 1 });
+  const rimL = spot(0xf4efe8, 120, [-6.5, 3.2, -4.5], [0.2, 0.4, 0], { angle: 0.32, penumbra: 1 });
   const rimR = spot(0xfff0dc, 70, [5.5, 2.4, 5.5], [0, 0.4, 0], { angle: 0.3, penumbra: 1 });
   const front = spot(0xffffff, 45, [7.5, 1.4, -2.5], [0.4, 0.35, 0], { angle: 0.3, penumbra: 1 });
-  for (const l of [key, rimL, rimR, front]) lights.add(l, l.target);
+  // underside lights, only lit while the camera is below the floor (kept in the
+  // scene at zero intensity so toggling them doesn't recompile materials):
+  // an even fill from the ground plus a soft, wide spot for some shape
+  const underFill = new THREE.HemisphereLight(0x000000, 0xeae6e0, 0);
+  const under = spot(0xffffff, 0, [2.5, -9, 1.5], [0, 0.3, 0], { angle: 0.9, penumbra: 1 });
+  for (const l of [key, rimL, rimR, front, under]) lights.add(l, l.target);
+  lights.add(underFill);
   scene.add(lights);
 
   const contact = createContactShadows(renderer);
@@ -305,8 +311,16 @@ export function createStudio(renderer, scene) {
   let contactDirty = true;
   return {
     floor,
-    lights: { key, rimL, rimR, front },
+    lights: { key, rimL, rimR, front, under },
     contact,
+    underside: false,
+    /** Hide the floor and light the car from below, for views from underneath. */
+    setUnderside(on) {
+      this.underside = on;
+      floor.visible = !on;
+      underFill.intensity = on ? 5 : 0;
+      under.intensity = on ? 170 : 0;
+    },
     /** Mark the car as changed so shadows and reflections are refreshed. */
     invalidate() {
       contactDirty = true;

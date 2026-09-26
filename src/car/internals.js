@@ -1,10 +1,59 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { loftStations, tubeThrough, latheX } from './geometry.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { loftStations, tubeThrough, latheX, cylinderBetween } from './geometry.js';
 import { addMesh } from './registry.js';
 import { EXHAUST_EXIT, REAR_AXLE_X } from './dims.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+
+/**
+ * Collects many small detail pieces for a part and adds them as a single
+ * mesh per material, so fine detail doesn't cost hundreds of draw calls.
+ */
+function detailer(part, M) {
+  const byMat = new Map();
+  const d = {
+    add(geo, mat) {
+      if (!byMat.has(mat)) byMat.set(mat, []);
+      byMat.get(mat).push(geo);
+    },
+    /** A bolt head standing on point p, facing along axis. */
+    bolt(p, axis, r = 0.0055, h = 0.007) {
+      d.add(cylinderBetween(p, p.clone().addScaledVector(axis, h), r, r, 6), M.steel);
+    },
+    /** n bolts evenly spaced on a circle of radius R around centre c. */
+    boltRing(c, axis, R, n, r) {
+      const u = Math.abs(axis.y) > 0.9 ? V(1, 0, 0) : V(0, 1, 0);
+      u.addScaledVector(axis, -u.dot(axis)).normalize();
+      const w = axis.clone().cross(u);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        d.bolt(c.clone().addScaledVector(u, Math.cos(a) * R).addScaledVector(w, Math.sin(a) * R), axis, r);
+      }
+    },
+    done() {
+      for (const [mat, geos] of byMat) {
+        const flat = geos.map((g) => (g.index ? g.toNonIndexed() : g));
+        const keepUv = flat.every((g) => g.attributes.uv);
+        for (const g of flat) {
+          for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(keepUv && k === 'uv')) g.deleteAttribute(k);
+          g.clearGroups();
+        }
+        addMesh(part, mergeGeometries(flat), mat);
+      }
+    },
+  };
+  return d;
+}
+
+/** Ring of cooling fins / bands around the X axis. */
+function bandX(x, y, z, r, tube = 0.004) {
+  const g = new THREE.TorusGeometry(r, tube, 6, 36);
+  g.rotateY(Math.PI / 2);
+  g.translate(x, y, z);
+  return g;
+}
 
 function rbox(w, h, d, r, x, y, z) {
   const g = new RoundedBoxGeometry(w, h, d, 3, r);
@@ -84,6 +133,57 @@ export function buildPowerUnit(reg, M) {
   // oil tank between engine and fuel cell
   addMesh(ice, rbox(0.05, 0.3, 0.3, 0.02, ICE_X0 + 0.015, 0.3, 0), M.aluminium);
 
+  /* Engine detail */
+  const d = detailer(ice, M);
+  const CYL_X = [0, 1, 2].map((i) => ICE_X0 - 0.09 - i * 0.175);
+  for (const s of [1, -1]) {
+    const dir = V(0, Math.cos(BANK), s * Math.sin(BANK)); // up the bank
+    const out = V(0, -Math.sin(BANK), s * Math.cos(BANK)); // away from the vee
+    const at = (x, up, side) => V(x, CRANK_Y, 0).addScaledVector(dir, up).addScaledVector(out, side);
+    // cam-cover bolts along both edges
+    for (let i = 0; i < 7; i++) {
+      const x = ICE_X0 - 0.035 - (i / 6) * (len - 0.07);
+      for (const side of [0.043, -0.043]) d.bolt(at(x, 0.257, side), dir);
+    }
+    // cooling ribs cast into the outer face of the cylinder head
+    for (let i = 0; i < 8; i++) {
+      const rib = new THREE.BoxGeometry(0.008, 0.15, 0.012);
+      rib.rotateX(s * BANK);
+      const c = at(ICE_X0 - 0.04 - (i / 7) * (len - 0.08), 0.13, 0.064);
+      rib.translate(c.x, c.y, c.z);
+      d.add(rib, M.engineBlack);
+    }
+    for (const x of CYL_X) {
+      // coil-pack connector and the loom that feeds it
+      d.add(cylinderBetween(at(x, 0.279, 0), at(x, 0.279, 0.026), 0.006, 0.006, 8), M.satinBlack);
+      // intake runner from the plenum down into the head
+      d.add(tubeThrough([at(x, 0.215, -0.05), V(x, 0.43, s * 0.085), V(x, 0.41, s * 0.03)], 0.013, { tubular: 16, radial: 10 }), M.magnesium);
+      // fuel injector at the port
+      d.add(cylinderBetween(at(x, 0.2, -0.062), at(x, 0.2, -0.062).add(V(0, 0.035, 0)), 0.007, 0.005, 8), M.steel);
+    }
+    d.add(
+      tubeThrough([at(ICE_X0 + 0.01, 0.27, 0.03), at(CYL_X[0], 0.28, 0.028), at(CYL_X[1], 0.28, 0.028), at(CYL_X[2], 0.28, 0.028), at(ICE_X1 + 0.03, 0.26, 0.03)], 0.0055, { tubular: 40, radial: 6 }),
+      M.satinBlack,
+    );
+    // fuel rail feeding the injectors
+    d.add(tubeThrough(CYL_X.map((x) => at(x, 0.232, -0.062)), 0.006, { tubular: 24, radial: 8 }), M.aluminium);
+    // exhaust collector: the three primaries merge before the turbine
+    d.add(cylinderBetween(V(-1.05, 0.25, s * 0.2), V(-1.12, 0.38, s * 0.08), 0.03, 0.036, 16), M.exhaust);
+  }
+  // bell-housing flange where the gearbox bolts on
+  d.add(bandX(ICE_X1, 0.24, 0, 0.125, 0.012), M.magnesium);
+  d.boltRing(V(ICE_X1 - 0.008, 0.24, 0), V(-1, 0, 0), 0.125, 14, 0.006);
+  // oil scavenge pump stack along the left of the sump, with its lines to the tank
+  d.add(cylinderBetween(V(-0.56, 0.1, -0.152), V(-0.88, 0.1, -0.152), 0.026, 0.026, 18), M.aluminium);
+  for (let i = 0; i < 5; i++) d.add(bandX(-0.59 - i * 0.065, 0.1, -0.152, 0.027), M.steel);
+  d.add(tubeThrough([[-0.56, 0.1, -0.152], [-0.51, 0.13, -0.16], [-0.47, 0.2, -0.13]], 0.007, { tubular: 16, radial: 8 }), M.steel);
+  d.add(tubeThrough([[-0.88, 0.1, -0.152], [-0.84, 0.07, -0.18], [-0.6, 0.07, -0.19], [-0.47, 0.28, -0.14]], 0.007, { tubular: 32, radial: 8 }), M.steel);
+  // water pump, piped to the right-hand radiator
+  d.add(cylinderBetween(V(-0.52, 0.14, -0.125), V(-0.52, 0.14, -0.19), 0.034, 0.034, 20), M.aluminium);
+  d.boltRing(V(-0.52, 0.14, -0.19), V(0, 0, -1), 0.025, 6, 0.004);
+  d.add(tubeThrough([[-0.52, 0.14, -0.19], [-0.5, 0.24, -0.215], [-0.46, 0.34, -0.2]], 0.013, { tubular: 16, radial: 10 }), M.aluminium);
+  d.done();
+
   /* Turbocharger (single, on the centreline behind the engine) */
   const tc = reg.part({ id: 'turbo', info: 'turbo', layer: 'pu', explode: [-0.2, 0.7, 0], delay: 0.4 });
   const TY = 0.44;
@@ -100,6 +200,17 @@ export function buildPowerUnit(reg, M) {
   addMesh(tc, shaft, M.steel);
   // compressor outlet to plenum
   addMesh(tc, tubeThrough([[-1.03, TY + 0.05, 0.03], [-1.0, 0.5, 0.06], [-0.97, 0.47, 0.04]], 0.028), M.aluminium);
+  const td = detailer(tc, M);
+  // compressor intake bellmouth
+  const bell = latheX([[0.046, -0.99], [0.048, -0.972], [0.055, -0.96], [0.066, -0.955]], 32);
+  bell.translate(0, TY, 0);
+  td.add(bell, M.aluminium);
+  // V-band clamps joining the housings
+  for (const x of [-1.09, -1.2]) td.add(bandX(x, TY, 0, 0.052, 0.006), M.steel);
+  // wastegate and its actuator on the turbine inlet
+  td.add(cylinderBetween(V(-1.18, TY + 0.06, -0.05), V(-1.18, TY + 0.12, -0.07), 0.018, 0.018, 16), M.foil);
+  td.add(cylinderBetween(V(-1.18, TY + 0.12, -0.07), V(-1.18, TY + 0.14, -0.078), 0.026, 0.026, 18), M.aluminium);
+  td.done();
 
   /* Exhaust tailpipe */
   const ex = reg.part({ id: 'exhaust', info: 'exhaust', layer: 'pu', explode: [-0.6, 0.55, 0], delay: 0.45 });
@@ -129,6 +240,15 @@ export function buildPowerUnit(reg, M) {
   addMesh(k, motor, M.aluminium);
   // orange high-voltage cable to the control electronics
   addMesh(k, tubeThrough([[-0.53, 0.12, 0.2], [-0.5, 0.18, 0.24], [-0.4, 0.23, 0.3]], 0.01), M.hv);
+  const kd = detailer(k, M);
+  // cooling fins around the stator housing
+  for (let i = 0; i < 8; i++) kd.add(bandX(-0.565 - i * 0.017, 0.12, 0.2, 0.059, 0.0035), M.magnesium);
+  // mounting flange to the engine's front gear case
+  kd.add(cylinderBetween(V(-0.528, 0.12, 0.2), V(-0.538, 0.12, 0.2), 0.072, 0.072, 32), M.magnesium);
+  kd.boltRing(V(-0.528, 0.12, 0.2), V(1, 0, 0), 0.064, 8, 0.0045);
+  // coolant feed and return
+  for (const dz of [0.02, -0.02]) kd.add(tubeThrough([[-0.62, 0.176, 0.2 + dz], [-0.56, 0.21, 0.19 + dz], [-0.49, 0.23, 0.13 + dz]], 0.0055, { tubular: 16, radial: 8 }), M.steel);
+  kd.done();
 
   /* Energy store (battery), in the floor of the survival cell */
   const es = reg.part({ id: 'energy-store', info: 'energy-store', layer: 'pu', explode: [0, -0.45, 0], delay: 0.5 });
@@ -180,6 +300,31 @@ export function buildInternals(reg, M) {
     c.translate(REAR_AXLE_X, 0.355, s * 0.105);
     addMesh(gb, c, M.magnesium);
   }
+  const gd = detailer(gb, M);
+  // bolts round the bell-housing face and the diff covers
+  gd.boltRing(V(-1.0, 0.24, 0), V(1, 0, 0), 0.105, 12, 0.006);
+  for (const s of [1, -1]) gd.boltRing(V(REAR_AXLE_X, 0.355, s * 0.12), V(0, 0, s), 0.048, 8, 0.0045);
+  // hydraulic control block with its servo valves and lines
+  gd.add(rbox(0.2, 0.045, 0.11, 0.008, -1.2, 0.382, 0), M.aluminium);
+  for (let i = 0; i < 4; i++) gd.add(cylinderBetween(V(-1.13 - i * 0.045, 0.4, 0.025), V(-1.13 - i * 0.045, 0.43, 0.025), 0.011, 0.011, 12), M.satinBlack);
+  for (const s of [1, -1]) gd.add(tubeThrough([[-1.3, 0.39, s * 0.04], [-1.5, 0.4, s * 0.07], [-1.64, 0.39, s * 0.09]], 0.0045, { tubular: 20, radial: 6 }), M.steel);
+  // gear-shift actuator along the left of the casing
+  gd.add(cylinderBetween(V(-1.05, 0.2, -0.14), V(-1.24, 0.2, -0.13), 0.017, 0.017, 14), M.aluminium);
+  // stiffening ribs down the sides of the casing
+  for (const s of [1, -1]) {
+    for (const [x, hw] of [[-1.15, 0.128], [-1.3, 0.119], [-1.45, 0.114], [-1.58, 0.112]]) {
+      const rib = new THREE.BoxGeometry(0.01, 0.13, 0.016);
+      rib.translate(x, 0.26, s * hw);
+      gd.add(rib, M.titanium);
+    }
+  }
+  // rear-suspension pick-up brackets
+  for (const s of [1, -1]) {
+    for (const [x, y, z] of [[-1.3, 0.2, 0.13], [-1.82, 0.2, 0.085], [-1.55, 0.2, 0.095], [-1.86, 0.31, 0.095]]) {
+      gd.add(rbox(0.03, 0.026, 0.024, 0.004, x, y, s * z), M.steel);
+    }
+  }
+  gd.done();
 
   /* Rear impact structure + central rear light */
   const ris = reg.part({ id: 'rear-impact-structure', info: 'rear-impact-structure', layer: 'chassis', explode: [-0.95, 0.05, 0], delay: 0.3 });

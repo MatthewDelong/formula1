@@ -4,22 +4,11 @@ import { CATEGORIES } from '../data/parts.js';
 const FREEDOM = ['None', 'Minimal', 'Limited', 'Substantial', 'High'];
 const NS = 'http://www.w3.org/2000/svg';
 
-/** Horizontal screen span not covered by the (expanded) side panels. */
-function freeBounds(w, cw) {
-  let L = 16;
-  let R = w - 16;
-  const c = document.getElementById('controls');
-  const i = document.getElementById('index');
-  if (c && !c.classList.contains('collapsed')) {
-    const r = c.getBoundingClientRect();
-    if (r.right < w / 2) L = r.right + 14;
-  }
-  if (i && !i.classList.contains('collapsed')) {
-    const r = i.getBoundingClientRect();
-    if (r.left > w / 2) R = r.left - 14;
-  }
-  if (R - L < cw + 20) return { L: 16, R: w - 16 };
-  return { L, R };
+/** Vertical screen span between the top and bottom toolbars. */
+function freeBounds(h) {
+  const top = document.getElementById('topbar')?.getBoundingClientRect().bottom ?? 0;
+  const bottom = document.getElementById('bottombar')?.getBoundingClientRect().top ?? h;
+  return { T: top + 12, B: bottom - 12 };
 }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -96,25 +85,23 @@ export class Callout {
 
   render(info, pinned) {
     const cat = CATEGORIES[info.cat];
-    this.color = cat.color;
-    this.card.style.setProperty('--cat', cat.color);
-    this.path.style.stroke = cat.color;
-    this.dot.style.fill = '#0b0d11';
-    this.dot.style.stroke = cat.color;
-    this.ring.style.stroke = cat.color;
+    this.path.style.stroke = '#d9d9d9';
+    this.dot.style.fill = '#0c0c0c';
+    this.dot.style.stroke = '#d9d9d9';
+    this.ring.style.stroke = '#d9d9d9';
     const bars = [0, 1, 2, 3].map((i) => `<span class="${i < info.freedom ? 'on' : ''}"></span>`).join('');
     this.card.innerHTML = `
       <div class="cat-row">
-        <span class="cat-pill"><i></i>${esc(cat.label)} <code>${cat.short}</code></span>
+        <span class="cat">${esc(cat.label)}</span>
         ${pinned ? '<button class="close" aria-label="Close">×</button>' : '<span class="pin">Click to pin</span>'}
       </div>
       <h3>${esc(info.name)}</h3>
-      <p class="summary">${esc(info.summary)}</p>
-      <div class="who"><b>Who makes it:</b> ${esc(cat.who)}</div>
+      <p>${esc(info.summary)}</p>
+      <p><b>Who makes it:</b> ${esc(cat.who)}</p>
       <div class="freedom">Team design freedom <div class="bars">${bars}</div><em>${FREEDOM[info.freedom]}</em></div>
       <ul>${info.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
-      ${info.numbers?.length ? `<div class="nums">${info.numbers.map(([k, v]) => `<div><small>${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}</div>` : ''}
-      ${info.isNew ? `<div class="new"><b>New for 2026:</b> ${esc(info.isNew)}</div>` : ''}
+      ${info.numbers?.length ? `<p>${info.numbers.map(([k, v]) => `<b>${esc(k)}:</b> ${esc(v)}`).join(' · ')}</p>` : ''}
+      ${info.isNew ? `<p><b>New for 2026:</b> ${esc(info.isNew)}</p>` : ''}
     `;
     this.card.querySelector('.close')?.addEventListener('click', () => this.onClose?.());
   }
@@ -132,10 +119,12 @@ export class Callout {
     const cw = this.card.offsetWidth;
     const ch = this.card.offsetHeight;
     const gap = 90;
-    const { L, R } = freeBounds(w, cw);
+    const L = 16;
+    const R = w - 16;
+    const { T, B } = freeBounds(h);
 
     if (!this.pos) {
-      // choose the side with more room between the side panels
+      // choose the side with more room
       const roomRight = R - (ax + gap);
       const roomLeft = ax - gap - L;
       this.side = roomRight >= cw ? 1 : roomLeft >= cw ? -1 : roomRight > roomLeft ? 1 : -1;
@@ -143,11 +132,11 @@ export class Callout {
     let tx = this.side > 0 ? ax + gap : ax - gap - cw;
     let ty = ay - 70;
     tx = THREE.MathUtils.clamp(tx, L, Math.max(L, R - cw));
-    ty = THREE.MathUtils.clamp(ty, 70, h - ch - 70);
+    ty = THREE.MathUtils.clamp(ty, T, Math.max(T, B - ch));
     if (w < 600) {
-      // phones: dock the card above the camera bar
+      // phones: dock the card above the bottom bar
       tx = (w - cw) / 2;
-      ty = Math.max(70, h - ch - 84);
+      ty = Math.max(T, B - ch);
     }
     if (!this.pos) this.pos = { x: tx, y: ty };
     else {
