@@ -85,15 +85,15 @@ export class Callout {
 
   render(info, pinned) {
     const cat = CATEGORIES[info.cat];
-    this.path.style.stroke = '#d9d9d9';
-    this.dot.style.fill = '#0c0c0c';
-    this.dot.style.stroke = '#d9d9d9';
-    this.ring.style.stroke = '#d9d9d9';
+    this.path.style.stroke = 'rgba(238, 236, 233, 0.7)';
+    this.dot.style.fill = '#131212';
+    this.dot.style.stroke = '#eeece9';
+    this.ring.style.stroke = '#eeece9';
     const bars = [0, 1, 2, 3].map((i) => `<span class="${i < info.freedom ? 'on' : ''}"></span>`).join('');
     this.card.innerHTML = `
       <div class="cat-row">
-        <span class="cat">${esc(cat.label)}</span>
-        ${pinned ? '<button class="close" aria-label="Close">×</button>' : '<span class="pin">Click to pin</span>'}
+        <span class="cat"><i style="background:${cat.color}"></i>${esc(cat.label)}</span>
+        ${pinned ? '<button class="close" aria-label="Close"></button>' : '<span class="pin">Click to pin</span>'}
       </div>
       <h3>${esc(info.name)}</h3>
       <p>${esc(info.summary)}</p>

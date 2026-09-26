@@ -71,9 +71,13 @@ export function initUI(h) {
   /* explode slider */
   const ex = $('explode');
   const exVal = $('explode-val');
+  const showExplode = (v) => {
+    exVal.textContent = `${Math.round(v * 100)}%`;
+    ex.style.setProperty('--p', `${v * 100}%`); // filled track
+  };
   ex.addEventListener('input', () => {
     h.onExplode(+ex.value);
-    exVal.textContent = `${Math.round(ex.value * 100)}%`;
+    showExplode(+ex.value);
     markPreset();
   });
 
@@ -192,7 +196,7 @@ export function initUI(h) {
   return {
     sync() {
       ex.value = state.explodeTarget;
-      exVal.textContent = `${Math.round(state.explodeTarget * 100)}%`;
+      showExplode(state.explodeTarget);
       for (const l of LAYERS) chips[l.id].classList.toggle('off', !state.layers[l.id]);
       $('xray').classList.toggle('on', state.xray);
       markPreset();
