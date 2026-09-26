@@ -347,11 +347,14 @@ function buildDriveshaft(reg, M, left) {
   const z0 = 0.11;
   const z1 = REAR_WHEEL.z - REAR_WHEEL.w / 2 * 0.72;
   addMesh(p, cylinderBetween(V(-1.7, y, s * z0), V(-1.7, y, s * z1), 0.022, 0.022, 16), M.steel);
+  // CV joints in pleated rubber boots
+  const boot = [];
+  for (let i = 0; i <= 12; i++) boot.push([i % 2 ? 0.036 : 0.044, -0.05 + (i / 12) * 0.1]);
+  boot[0][0] = boot[12][0] = 0.026;
   for (const z of [z0 + 0.03, z1 - 0.03]) {
-    const cv = new THREE.SphereGeometry(0.042, 20, 14);
-    cv.scale(1, 1, 1.3);
+    const cv = latheZ(boot, 28);
     cv.translate(-1.7, y, s * z);
-    addMesh(p, cv, M.satinBlack);
+    addMesh(p, cv, M.rubber);
   }
 }
 

@@ -10,8 +10,8 @@ export function createDimensions(parent) {
   const group = new THREE.Group();
   group.name = 'dimensions';
   parent.add(group);
-  const mat = new THREE.LineBasicMaterial({ color: 0xf5f7fa, transparent: true, opacity: 0.9, depthTest: false });
-  const dash = new THREE.LineDashedMaterial({ color: 0xf5f7fa, dashSize: 0.03, gapSize: 0.025, transparent: true, opacity: 0.55, depthTest: false });
+  const mat = new THREE.LineBasicMaterial({ color: 0xc8c8c8, transparent: true, opacity: 0.85, depthTest: false });
+  const dash = new THREE.LineDashedMaterial({ color: 0xc8c8c8, dashSize: 0.03, gapSize: 0.025, transparent: true, opacity: 0.55, depthTest: false });
   const labels = [];
 
   const V = (x, y, z) => new THREE.Vector3(x, y, z);

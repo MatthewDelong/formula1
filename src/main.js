@@ -44,7 +44,7 @@ const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerH
 camera.position.set(5.6, 2.3, 5.2);
 {
   const a = window.innerWidth / window.innerHeight;
-  if (a < 1.3) camera.position.sub(new THREE.Vector3(0, 0.4, 0)).multiplyScalar(Math.min(2.6, 1.35 / a)).add(new THREE.Vector3(0, 0.4, 0));
+  if (a < 1.3) camera.position.sub(new THREE.Vector3(0, 0.4, 0)).multiplyScalar(Math.min(3.2, Math.max(1, 1.2 / a))).add(new THREE.Vector3(0, 0.4, 0));
 }
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -52,8 +52,10 @@ controls.target.set(0, 0.4, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.minDistance = 1.2;
-controls.maxDistance = 16;
-controls.maxPolarAngle = Math.PI * 0.495;
+controls.maxDistance = 28; // portrait phones pull well back to fit the whole car
+// keep the camera above the floor, except in the underside view
+const MAX_POLAR = Math.PI * 0.495;
+controls.maxPolarAngle = MAX_POLAR;
 controls.update();
 
 /* ------------------------------------------------------------------ */
@@ -69,6 +71,7 @@ const box = new THREE.Box3();
 for (const p of parts) {
   box.setFromObject(p);
   p.userData.centre = box.getCenter(new THREE.Vector3());
+  p.userData.bounds = box.clone();
   p.userData.size = box.getSize(new THREE.Vector3()).length();
   p.userData.baseScale = p.scale.clone();
   const e = p.userData.explode;
@@ -113,7 +116,7 @@ outline.edgeStrength = 5;
 outline.edgeGlow = 0.6;
 outline.edgeThickness = 1.6;
 outline.visibleEdgeColor.set('#ffffff');
-outline.hiddenEdgeColor.set('#3a4452');
+outline.hiddenEdgeColor.set('#444444');
 composer.addPass(outline);
 composer.addPass(new OutputPass());
 // final grade in display space: gentle vignette + dithering to hide banding in the dark falloff
@@ -144,6 +147,7 @@ const state = {
   layers: Object.fromEntries(LAYERS.map((l) => [l.id, true])),
   view: 'real',
   xray: false,
+  frame: false, // ghost the painted chassis shells so the internals show through
   aeroT: 0,
   aeroTarget: 0,
   hover: null, // part group
@@ -173,7 +177,7 @@ const catMats = Object.fromEntries(
   ]),
 );
 const ghostMat = new THREE.MeshPhysicalMaterial({
-  color: 0xa8d8ff,
+  color: 0xd0d0d0,
   roughness: 0.15,
   metalness: 0,
   transparent: true,
@@ -193,7 +197,8 @@ function highlighted(mat, color) {
     }
     if (h.emissive) {
       h.emissive = new THREE.Color(color);
-      h.emissiveIntensity = mat === ghostMat ? 0.6 : 0.28;
+      // a neutral (white) glow reads much brighter than a category colour, so keep it subtle
+      h.emissiveIntensity = mat === ghostMat ? 0.6 : color === '#ffffff' ? 0.08 : 0.28;
     }
     if (mat === ghostMat) h.opacity = 0.35;
     hiCache.set(k, h);
@@ -202,7 +207,7 @@ function highlighted(mat, color) {
 }
 
 function isGhost(p) {
-  return state.xray && p.userData.xray;
+  return p.userData.xray && (state.xray || (state.frame && p.userData.layer === 'chassis'));
 }
 
 function refreshMaterials() {
@@ -219,7 +224,7 @@ function refreshMaterials() {
       let m = o.userData.baseMaterial;
       if (state.view === 'category' && !m.emissiveMap && !(m.emissiveIntensity > 1)) m = catMats[cat];
       if (ghost) m = ghostMat;
-      if (hot) m = highlighted(m, CATEGORIES[cat].color);
+      if (hot) m = highlighted(m, state.view === 'category' || state.categoryHover ? CATEGORIES[cat].color : '#ffffff');
       o.material = m;
       o.castShadow = !ghost;
     });
@@ -228,8 +233,7 @@ function refreshMaterials() {
   for (const id of hotInfo) for (const p of byInfo.get(id) ?? []) if (p.visible) sel.push(p);
   if (state.categoryHover) for (const p of parts) if (PARTS[p.userData.infoId]?.cat === state.categoryHover && p.visible) sel.push(p);
   outline.selectedObjects = sel;
-  const col = state.categoryHover ? CATEGORIES[state.categoryHover].color : CATEGORIES[PARTS[state.hoverInfo ?? state.pinned]?.cat]?.color;
-  outline.visibleEdgeColor.set(col ?? '#ffffff');
+  outline.visibleEdgeColor.set(state.categoryHover ? CATEGORIES[state.categoryHover].color : '#ffffff');
   studio.floor.invalidate();
   renderer.shadowMap.needsUpdate = true; // x-ray toggles shadow casting
   requestRender();
@@ -246,6 +250,7 @@ let pointerDirty = false;
 let downPos = null;
 
 renderer.domElement.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse') return; // touch: no hover, a tap pins instead
   pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
   pointerInside = true;
@@ -314,7 +319,6 @@ function pin(part, point) {
   callout.show(PARTS[state.pinned], state.pinned, part, point, true);
   refreshMaterials();
   ui.markSelected(state.pinned);
-  hideToast();
 }
 
 function unpin() {
@@ -339,26 +343,68 @@ const CAMS = {
   top: { pos: [0, 9.5, 0.01], target: [0, 0.3, 0] },
   front: { pos: [7.8, 1.0, 0], target: [0, 0.45, 0] },
   rear: { pos: [-6.8, 1.6, 1.4], target: [0, 0.45, 0] },
-  under: { pos: [3.2, 0.12, 4.0], target: [0, 0.6, 0] },
+  under: { pos: [0, -8.9, 0.01], target: [0, 0.3, 0] },
+  exploded: { pos: [9.6, 3.95, 9.0], target: [0, 0.4, 0] },
 };
 let camTween = null;
 /** Pull the camera back on tall/narrow screens so the whole car fits. */
 function aspectScale() {
   const a = window.innerWidth / window.innerHeight;
-  return a < 1.3 ? Math.min(2.6, 1.35 / a) : 1;
+  return a < 1.3 ? Math.min(3.2, Math.max(1, 1.2 / a)) : 1;
 }
 function framed(pos, target) {
   const t = new THREE.Vector3(...target);
   return new THREE.Vector3(...pos).sub(t).multiplyScalar(aspectScale()).add(t).toArray();
 }
-function flyTo(pos, target, dur = 1.0) {
+/** Animate the camera; `below` lets it (and the user) orbit under the floor. */
+/**
+ * How far the centre of the (visible) car has moved at explode amount `e`,
+ * relative to the assembled car: parts fly outward and the whole car lifts.
+ */
+const _cb = new THREE.Box3();
+const _pb = new THREE.Box3();
+const _eo = new THREE.Vector3();
+function explodeCentre(e, out) {
+  _cb.makeEmpty();
+  for (const p of parts) {
+    const u = p.userData;
+    if (!state.layers[u.layer]) continue;
+    const d = u.delay * 0.5;
+    const t = ease(THREE.MathUtils.clamp((e - d) / (1 - d), 0, 1));
+    _cb.union(_pb.copy(u.bounds).translate(_eo.copy(u.explode).multiplyScalar(t)));
+  }
+  _cb.getCenter(out);
+  out.y += ease(Math.min(1, e * 1.6)) * 1.0; // the whole car lifts as it explodes
+  return out;
+}
+const _c0 = new THREE.Vector3();
+function explodeOffset(e) {
+  return explodeCentre(e, new THREE.Vector3()).sub(explodeCentre(0, _c0));
+}
+/** A camera preset's [position, target], shifted to follow the exploded car. */
+function pose({ pos, target }) {
+  const off = explodeOffset(state.explode).toArray();
+  const t = target.map((v, i) => v + off[i]);
+  return [framed(pos.map((v, i) => v + off[i]), t), t];
+}
+
+function flyTo(pos, target, dur = 1.0, below = false) {
+  if (below) controls.maxPolarAngle = Math.PI;
+  const t0 = controls.target.clone();
+  const t1 = new THREE.Vector3(...target);
+  const o0 = camera.position.clone().sub(t0);
+  const o1 = new THREE.Vector3(...pos).sub(t1);
   camTween = {
     t: 0,
     dur,
-    p0: camera.position.clone(),
-    p1: new THREE.Vector3(...pos),
-    t0: controls.target.clone(),
-    t1: new THREE.Vector3(...target),
+    below,
+    t0,
+    t1,
+    // swing around the target instead of cutting straight through the car
+    d0: o0.clone().normalize(),
+    rot: new THREE.Quaternion().setFromUnitVectors(o0.clone().normalize(), o1.clone().normalize()),
+    r0: o0.length(),
+    r1: o1.length(),
   };
 }
 function flyToPart(infoId) {
@@ -408,10 +454,7 @@ function surfacePoint(part, viewPos) {
 
 const PRESETS = {
   assembled: { explode: 0, off: [] },
-  shell: { explode: 0, off: ['body'] },
-  wheels: { explode: 0, off: ['wheels'] },
-  bare: { explode: 0, off: ['body', 'wheels', 'aero', 'corners'] },
-  pu: { explode: 0, off: ['body', 'wheels', 'aero', 'corners', 'cockpit', 'electronics'], xray: true },
+  shell: { explode: 0, off: ['body'], frame: true },
   exploded: { explode: 1, off: [] },
 };
 
@@ -427,11 +470,11 @@ const ui = initUI({
     const p = PRESETS[name];
     state.explodeTarget = p.explode;
     for (const l of LAYERS) state.layers[l.id] = !p.off.includes(l.id);
-    state.xray = !!p.xray;
+    state.frame = !!p.frame;
     ui.sync();
     refreshMaterials();
-    if (name === 'exploded') flyTo(framed([9.6, 4.6, 9.0], [0, 1.05, 0]), [0, 1.05, 0], 1.2);
-    else if (state.explode > 0.5) flyTo(framed(CAMS.hero.pos, CAMS.hero.target), CAMS.hero.target, 1.2);
+    if (name === 'exploded') flyTo(...pose(CAMS.exploded), 1.2);
+    else if (state.explode > 0.5) flyTo(...pose(CAMS.hero), 1.2);
   },
   onView(v) {
     state.view = v;
@@ -454,16 +497,12 @@ const ui = initUI({
     controls.autoRotate = v;
     controls.autoRotateSpeed = 0.8;
   },
-  onAero(mode) {
-    state.aeroTarget = mode === 'straight' ? 1 : 0;
-  },
   onCompound(c) {
     M.compound.color.set(c);
     studio.floor.invalidate();
   },
   onCam(name) {
-    const c = CAMS[name];
-    flyTo(framed(c.pos, c.target), c.target);
+    flyTo(...pose(CAMS[name]), 1.0, name === 'under');
   },
   onPick(infoId) {
     const group = byInfo.get(infoId);
@@ -478,8 +517,9 @@ const ui = initUI({
       update(0);
     }
     // turn x-ray off for the picked part's own layer so it's visible
-    if (state.xray && group[0].userData.xray) {
+    if (isGhost(group[0])) {
       state.xray = false;
+      state.frame = false;
       ui.sync();
     }
     const camPos = flyToPart(infoId);
@@ -501,11 +541,6 @@ const ui = initUI({
   counts: Object.fromEntries(Object.keys(CATEGORIES).map((k) => [k, Object.values(PARTS).filter((p) => p.cat === k).length])),
 });
 
-function hideToast() {
-  document.getElementById('toast').classList.add('gone');
-}
-setTimeout(hideToast, 9000);
-
 /* ------------------------------------------------------------------ */
 /* Animation                                                          */
 /* ------------------------------------------------------------------ */
@@ -525,11 +560,26 @@ function requestRender(frames = 1) {
   pendingFrames = Math.max(pendingFrames, frames);
 }
 
+/** Keep the orbit centred on the car as it explodes: move camera and target together. */
+const _f0 = new THREE.Vector3();
+const _f1 = new THREE.Vector3();
+function followExplode(from, to) {
+  const shift = explodeCentre(to, _f1).sub(explodeCentre(from, _f0));
+  controls.target.add(shift);
+  camera.position.add(shift);
+  if (camTween) {
+    camTween.t0.add(shift);
+    camTween.t1.add(shift);
+  }
+}
+
 function update(dt) {
   // explode
   const k = 1 - Math.exp(-dt * 3.2);
+  const prevExplode = state.explode;
   state.explode += (state.explodeTarget - state.explode) * k;
   if (Math.abs(state.explode - state.explodeTarget) < 1e-4) state.explode = state.explodeTarget;
+  if (state.explode !== prevExplode) followExplode(prevExplode, state.explode);
   const lift = ease(Math.min(1, state.explode * 1.6)) * 1.0;
   car.position.y = lift - TYRE_SQUASH;
   dims.setOpacity(1 - Math.min(1, state.explode * 10));
@@ -573,12 +623,24 @@ function update(dt) {
   if (camTween) {
     camTween.t += dt / camTween.dur;
     const e = ease(Math.min(1, camTween.t));
-    camera.position.lerpVectors(camTween.p0, camTween.p1, e);
-    controls.target.lerpVectors(camTween.t0, camTween.t1, e);
-    if (camTween.t >= 1) camTween = null;
+    const { t0, t1, d0, rot, r0, r1 } = camTween;
+    controls.target.lerpVectors(t0, t1, e);
+    const dir = d0.clone().applyQuaternion(new THREE.Quaternion().slerp(rot, e));
+    camera.position.copy(controls.target).addScaledVector(dir, THREE.MathUtils.lerp(r0, r1, e));
+    if (camTween.t >= 1) {
+      if (!camTween.below) controls.maxPolarAngle = MAX_POLAR;
+      camTween = null;
+    }
     requestRender();
   }
   controls.update();
+
+  // from below, drop the floor and light the underside
+  const below = camera.position.y < 0.02;
+  if (below !== studio.underside) {
+    studio.setUnderside(below);
+    requestRender();
+  }
 
   // hover picking (throttled)
   if (pointerInside && pointerDirty && !downPos && frame % 2 === 0) {
@@ -591,8 +653,23 @@ function update(dt) {
   }
   if (!pointerInside) pointerDirty = false;
 
+  // phones dock the card at the bottom: slide the view up so the pinned part stays visible
+  const card = document.getElementById('card');
+  const wantShift = window.innerWidth < 600 && state.pinned ? Math.min(card.offsetHeight * 0.5, window.innerHeight * 0.25) : 0;
+  if (Math.abs(wantShift - viewShift) > 0.5) {
+    viewShift += (wantShift - viewShift) * (1 - Math.exp(-dt * 8));
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (Math.abs(viewShift) < 0.5 && wantShift === 0) {
+      viewShift = 0;
+      camera.clearViewOffset();
+    } else camera.setViewOffset(w, h, 0, viewShift, w, h);
+    requestRender();
+  }
+
   callout.update();
 }
+let viewShift = 0;
 
 // Cap drawing at ~60 fps: high-refresh displays would otherwise double the GPU load
 const MIN_FRAME_MS = 1000 / 61;
@@ -620,6 +697,7 @@ window.addEventListener('resize', () => {
   const w = window.innerWidth;
   const h = window.innerHeight;
   camera.aspect = w / h;
+  if (viewShift) camera.setViewOffset(w, h, 0, viewShift, w, h);
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
   composer.setSize(w, h); // also resizes every pass at the current pixel ratio
@@ -649,6 +727,7 @@ requestAnimationFrame((now) => {
 window.__f1 = {
   THREE, scene, car, reg, state, camera, controls, studio, renderer, composer,
   // advance the simulation deterministically (useful when rAF is throttled)
+  explodeOffset,
   advance(seconds = 1) {
     for (let t = 0; t < seconds; t += 1 / 60) update(1 / 60);
     render();

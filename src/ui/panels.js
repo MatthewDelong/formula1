@@ -2,11 +2,8 @@ import { PARTS, CATEGORIES, LAYERS, OVERVIEW } from '../data/parts.js';
 
 const PRESET_LABELS = [
   ['assembled', 'Assembled'],
-  ['shell', 'Remove bodywork'],
-  ['wheels', 'Remove wheels'],
-  ['bare', 'Bare chassis'],
-  ['pu', 'Power unit'],
-  ['exploded', 'Exploded view'],
+  ['shell', 'No bodywork'],
+  ['exploded', 'Exploded'],
 ];
 
 const COMPOUNDS = [
@@ -22,12 +19,37 @@ const $ = (id) => document.getElementById(id);
 export function initUI(h) {
   const { state } = h;
 
-  /* collapsible panels */
-  document.querySelectorAll('.panel-toggle').forEach((b) =>
-    b.addEventListener('click', () => $(b.dataset.target).classList.toggle('collapsed')),
-  );
-  if (window.innerWidth < 600) $('index').classList.add('collapsed');
-  if (window.innerWidth < 600) $('controls').classList.add('collapsed');
+  /* expose the top bar's height to CSS (the key and menus sit just below it) */
+  const topbar = $('topbar');
+  const trackTopbar = () => document.documentElement.style.setProperty('--topbar-bottom', `${topbar.getBoundingClientRect().bottom}px`);
+  new ResizeObserver(trackTopbar).observe(topbar);
+  trackTopbar();
+
+  /* dropdown menus */
+  const menus = [...document.querySelectorAll('[data-menu]')];
+  const closeMenus = (except) =>
+    menus.forEach((b) => {
+      if (b === except) return;
+      b.classList.remove('on');
+      $(b.dataset.menu).hidden = true;
+    });
+  for (const b of menus) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeMenus(b);
+      const m = $(b.dataset.menu);
+      m.style.top = `${$('topbar').getBoundingClientRect().bottom + 8}px`;
+      m.hidden = !m.hidden;
+      b.classList.toggle('on', !m.hidden);
+      if (!m.hidden) m.querySelector('input[type=search]')?.focus();
+    });
+  }
+  document.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest('.menu, [data-menu]')) closeMenus();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMenus();
+  });
 
   /* presets */
   const presets = $('presets');
@@ -35,14 +57,16 @@ export function initUI(h) {
     const b = document.createElement('button');
     b.textContent = label;
     b.dataset.p = id;
-    b.addEventListener('click', () => {
-      presets.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-      h.onPreset(id);
-    });
+    b.addEventListener('click', () => h.onPreset(id));
     presets.append(b);
   }
-  presets.firstChild.classList.add('on');
-  const clearPreset = () => presets.querySelectorAll('button').forEach((x) => x.classList.remove('on'));
+  /** Highlight the view that matches the current state (none after a manual layer change). */
+  const markPreset = () => {
+    const off = LAYERS.filter((l) => !state.layers[l.id]).map((l) => l.id).join();
+    const current = state.explodeTarget > 0 ? (off ? null : 'exploded') : off === '' ? 'assembled' : off === 'body' ? 'shell' : null;
+    presets.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.p === current));
+  };
+  markPreset();
 
   /* explode slider */
   const ex = $('explode');
@@ -50,7 +74,7 @@ export function initUI(h) {
   ex.addEventListener('input', () => {
     h.onExplode(+ex.value);
     exVal.textContent = `${Math.round(ex.value * 100)}%`;
-    clearPreset();
+    markPreset();
   });
 
   /* layers */
@@ -63,48 +87,38 @@ export function initUI(h) {
     c.addEventListener('click', () => {
       const on = c.classList.toggle('off') === false;
       h.onLayer(l.id, on);
-      clearPreset();
+      markPreset();
     });
     chips[l.id] = c;
     layerEl.append(c);
   }
 
-  /* view mode */
-  const seg = (el, cb) => {
-    el.querySelectorAll('button').forEach((b) =>
-      b.addEventListener('click', () => {
-        el.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-        cb(b.dataset.v);
-      }),
-    );
+  /* toggle buttons */
+  const toggle = (id, cb) => {
+    const b = $(id);
+    b.addEventListener('click', () => cb(b.classList.toggle('on')));
+    return b;
   };
-  seg($('view-mode'), h.onView);
-  const aeroHint = $('aero-hint');
-  seg($('aero-mode'), (v) => {
-    h.onAero(v);
-    aeroHint.textContent =
-      v === 'straight'
-        ? 'Low-drag setting for straights. The flaps open inside FIA activation zones and are available to every driver.'
-        : 'High-downforce default. The front and rear flaps are closed.';
-  });
-  $('xray').addEventListener('change', (e) => h.onXray(e.target.checked));
-  $('dims').addEventListener('change', (e) => h.onDims(e.target.checked));
-  $('spin').addEventListener('change', (e) => h.onSpin(e.target.checked));
+  toggle('view-mode', (on) => h.onView(on ? 'category' : 'real'));
+  toggle('xray', h.onXray);
+  toggle('dims', h.onDims);
+  toggle('spin', h.onSpin);
 
-  /* swatches */
-  const swatches = (el, items, cb) => {
-    items.forEach((it, i) => {
-      const b = document.createElement('button');
-      b.className = 'swatch' + (i === 0 ? ' on' : '');
-      b.innerHTML = `<i style="background:${it.bg}"></i>${it.name}`;
-      b.addEventListener('click', () => {
-        el.querySelectorAll('.swatch').forEach((x) => x.classList.toggle('on', x === b));
-        cb(it);
-      });
-      el.append(b);
-    });
+  /* tyre compound: click to cycle */
+  const tyre = $('compound');
+  let ci = 0;
+  const names = tyre.querySelector('.names');
+  names.innerHTML = COMPOUNDS.map(([name]) => `<span>${name}</span>`).join('');
+  const showCompound = () => {
+    tyre.querySelector('i').style.background = COMPOUNDS[ci][1];
+    [...names.children].forEach((s, i) => s.classList.toggle('on', i === ci));
   };
-  swatches($('compounds'), COMPOUNDS.map(([name, c]) => ({ name, bg: c, c })), (it) => h.onCompound(it.c));
+  showCompound();
+  tyre.addEventListener('click', () => {
+    ci = (ci + 1) % COMPOUNDS.length;
+    showCompound();
+    h.onCompound(COMPOUNDS[ci][1]);
+  });
 
   /* camera bar */
   const cams = $('cams');
@@ -123,6 +137,17 @@ export function initUI(h) {
     li.addEventListener('mouseenter', () => h.onCategoryHover(k));
     li.addEventListener('mouseleave', () => h.onCategoryHover(null));
     legend.append(li);
+  }
+
+  /* always-visible colour key (top right) */
+  const key = $('key');
+  for (const [k, c] of Object.entries(CATEGORIES)) {
+    const li = document.createElement('li');
+    li.innerHTML = `<i style="background:${c.color}"></i>${c.label}`;
+    li.title = c.who;
+    li.addEventListener('mouseenter', () => h.onCategoryHover(k));
+    li.addEventListener('mouseleave', () => h.onCategoryHover(null));
+    key.append(li);
   }
 
   /* overview */
@@ -169,7 +194,8 @@ export function initUI(h) {
       ex.value = state.explodeTarget;
       exVal.textContent = `${Math.round(state.explodeTarget * 100)}%`;
       for (const l of LAYERS) chips[l.id].classList.toggle('off', !state.layers[l.id]);
-      $('xray').checked = state.xray;
+      $('xray').classList.toggle('on', state.xray);
+      markPreset();
     },
     markHot(id) {
       for (const [k, b] of Object.entries(items)) b.classList.toggle('hot', k === id);
