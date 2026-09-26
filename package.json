@@ -1,0 +1,21 @@
+{
+  "name": "f1-regs-explorer",
+  "version": "1.0.0",
+  "description": "Interactive, explodable 3D F1 car explaining the FIA technical regulations",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.0"
+  },
+  "private": true
+}
