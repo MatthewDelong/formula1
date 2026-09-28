@@ -262,14 +262,49 @@ function makeLiveryMaterial() {
         `#include <common>
          varying vec3 vLivPos;
          uniform vec3 uPrimary; uniform vec3 uDark;
+         
+         // Helper to draw some geometric circuit-like lines
+         float circuitPattern(vec2 uv) {
+           vec2 p = fract(uv * 10.0) - 0.5;
+           float d = length(p);
+           return smoothstep(0.4, 0.45, d) * smoothstep(0.5, 0.45, d);
+         }
+
          vec3 liveryColor(vec3 p, vec3 n) {
-           vec3 col = uPrimary;
+           // F1-Telemetry colors
+           vec3 telemetryBlue = vec3(0.01, 0.15, 0.65); // Deep bright blue
+           vec3 telemetryWhite = vec3(0.95, 0.95, 0.95);
+           vec3 telemetryLightBlue = vec3(0.2, 0.4, 0.9);
+           
+           vec3 col = telemetryBlue; // Base color is blue
+
+           // White nose top and central spine
+           // We use a smoothed absolute z to define the central white band
+           float spineWidth = 0.15 + smoothstep(1.5, 0.0, p.x) * 0.1; // wider near cockpit
+           if (abs(p.z) < spineWidth && p.y > 0.25) {
+             col = telemetryWhite;
+           }
+           
+           // Geometric sweep on the engine cover and sidepods
+           float sweep = p.x + abs(p.z) * 1.5;
+           if (sweep > -0.5 && sweep < 0.5 && p.y > 0.3) {
+             col = telemetryWhite;
+           }
+
+           // Add some "circuit" texture details to the blue areas (sidepods)
+           if (col == telemetryBlue && p.y > 0.2 && p.x < 1.0 && p.x > -1.0) {
+              float circuit = circuitPattern(vec2(p.x, p.z + p.y));
+              col = mix(col, telemetryLightBlue, circuit * 0.3);
+           }
+
            // downward-facing undersides are left as dark bare carbon
            float dark = 1.0 - smoothstep(-0.7, -0.45, n.y);
            col = mix(col, uDark, dark);
+           
            // shut line where the removable nose meets the survival cell
            float seam = 1.0 - smoothstep(0.0006, 0.0016, abs(p.x - 1.80));
            col *= 1.0 - 0.55 * seam;
+           
            return col;
          }`
       )
