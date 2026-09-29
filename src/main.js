@@ -7,6 +7,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 
 import { buildCar } from './car/build.js';
 import { setLiveryColor } from './car/materials.js';
@@ -737,4 +738,105 @@ window.__f1 = {
     for (let t = 0; t < seconds; t += 1 / 60) update(1 / 60);
     render();
   },
+  exportCar() {
+    const originalColors = new Map();
+    let liveryMat = null;
+
+    car.traverse((o) => {
+      if (o.isMesh && o.material && o.material.userData && o.material.userData.livery) {
+        liveryMat = o.material;
+        const pos = o.geometry.attributes.position;
+        const norm = o.geometry.attributes.normal;
+        if (!pos || !norm) return;
+
+        const colors = new Float32Array(pos.count * 3);
+        const smoothstep = (edge0, edge1, x) => {
+          const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+          return t * t * (3 - 2 * t);
+        };
+
+        for (let i = 0; i < pos.count; i++) {
+          const x = pos.getX(i);
+          const y = pos.getY(i);
+          const z = pos.getZ(i);
+          const nx = norm.getX(i);
+          const ny = norm.getY(i);
+          const nz = norm.getZ(i);
+
+          let r = 0.01, g = 0.15, b = 0.65; // telemetryBlue
+          
+          const spineWidth = 0.15 + smoothstep(1.5, 0.0, x) * 0.1;
+          if (Math.abs(z) < spineWidth && y > 0.25) {
+            r = 0.95; g = 0.95; b = 0.95;
+          }
+          
+          const sweep = x + Math.abs(z) * 1.5;
+          if (sweep > -0.5 && sweep < 0.5 && y > 0.3) {
+            r = 0.95; g = 0.95; b = 0.95;
+          }
+          
+          if (r === 0.01 && y > 0.2 && x < 1.0 && x > -1.0) {
+             let px = (x * 10.0) % 1.0; if (px < 0) px += 1.0; px -= 0.5;
+             let py = ((z + y) * 10.0) % 1.0; if (py < 0) py += 1.0; py -= 0.5;
+             const d = Math.sqrt(px*px + py*py);
+             const circuit = smoothstep(0.4, 0.45, d) * smoothstep(0.5, 0.45, d);
+             const t = circuit * 0.3;
+             r = r * (1 - t) + 0.2 * t; g = g * (1 - t) + 0.4 * t; b = b * (1 - t) + 0.9 * t;
+          }
+          
+          const dark = 1.0 - smoothstep(-0.7, -0.45, ny);
+          const dr = 0.051, dg = 0.043, db = 0.047; // #0d0b0c
+          r = r * (1 - dark) + dr * dark;
+          g = g * (1 - dark) + dg * dark;
+          b = b * (1 - dark) + db * dark;
+          
+          const seam = 1.0 - smoothstep(0.0006, 0.0016, Math.abs(x - 1.80));
+          const mult = 1.0 - 0.55 * seam;
+          r *= mult; g *= mult; b *= mult;
+
+          // convert from linear to srgb for export since GLTF expects sRGB vertex colors
+          colors[i * 3]     = r <= 0.0031308 ? r * 12.92 : 1.055 * Math.pow(r, 1 / 2.4) - 0.055;
+          colors[i * 3 + 1] = g <= 0.0031308 ? g * 12.92 : 1.055 * Math.pow(g, 1 / 2.4) - 0.055;
+          colors[i * 3 + 2] = b <= 0.0031308 ? b * 12.92 : 1.055 * Math.pow(b, 1 / 2.4) - 0.055;
+        }
+
+        if (o.geometry.attributes.color) {
+          originalColors.set(o, o.geometry.attributes.color);
+        }
+        o.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      }
+    });
+
+    const oldVc = liveryMat ? liveryMat.vertexColors : false;
+    if (liveryMat) liveryMat.vertexColors = true;
+
+    const exporter = new GLTFExporter();
+    exporter.parse(
+      car,
+      (gltf) => {
+        // cleanup
+        car.traverse((o) => {
+          if (o.isMesh && o.material && o.material.userData && o.material.userData.livery) {
+            if (originalColors.has(o)) {
+              o.geometry.setAttribute('color', originalColors.get(o));
+            } else {
+              o.geometry.deleteAttribute('color');
+            }
+          }
+        });
+        if (liveryMat) liveryMat.vertexColors = oldVc;
+
+        const blob = new Blob([gltf], { type: 'application/octet-stream' });
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = URL.createObjectURL(blob);
+        link.download = 'f1_2026_model.glb';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      },
+      (error) => console.error('An error happened during parsing', error),
+      { binary: true }
+    );
+  }
 };

@@ -20,6 +20,7 @@ npm run build    # static build in dist/
 - **Dimensions**: overlay the key regulated measurements.
 - **Active aero**: switch Corner Mode / Straight Mode to animate the 2026 movable wings.
 - Change the **tyre compound**.
+- **Export the 3D model**: open your browser developer tools console and run `window.__f1.exportCar()` to download the generated 2026 F1 car as a `.glb` file.
 
 ## Code map
 
