@@ -2,23 +2,44 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>F1 Rules Explorer</title>
-    <meta name="theme-color" content="#080808" />
-    <meta name="description" content="An interactive, explodable 3D Formula 1 car that explains the FIA technical regulations part by part." />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="An interactive, explodable 3D Formula 1 car that explains the FIA technical regulations part by part."
+    />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://formula1parts.vercel.app/" />
     <meta property="og:title" content="F1 Parts" />
-    <meta property="og:description" content="An interactive, explodable 3D Formula 1 car that explains the FIA technical regulations part by part." />
-    <meta property="og:image" content="https://formula1parts.vercel.app/og.jpg" />
+    <meta
+      property="og:description"
+      content="An interactive, explodable 3D Formula 1 car that explains the FIA technical regulations part by part."
+    />
+    <meta
+      property="og:image"
+      content="https://formula1parts.vercel.app/og.jpg"
+    />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="A dark red 2026-spec Formula 1 car in a dark studio, with the title F1 Parts" />
+    <meta
+      property="og:image:alt"
+      content="A dark red 2026-spec Formula 1 car in a dark studio, with the title F1 Parts"
+    />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://formula1parts.vercel.app/og.jpg" />
+    <meta
+      name="twitter:image"
+      content="https://formula1parts.vercel.app/og.jpg"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -30,7 +51,15 @@
       <div class="group" id="presets"></div>
       <div class="group">
         <label class="explode" title="Explode">
-          <input id="explode" type="range" min="0" max="1" step="0.001" value="0" aria-label="Explode" />
+          <input
+            id="explode"
+            type="range"
+            min="0"
+            max="1"
+            step="0.001"
+            value="0"
+            aria-label="Explode"
+          />
           <output id="explode-val">0%</output>
         </label>
         <span class="sep"></span>
@@ -41,9 +70,16 @@
 
     <ul id="key" aria-label="Rule colours"></ul>
 
-    <div class="menu" id="layers-menu" hidden><div class="chips" id="layers"></div></div>
+    <div class="menu" id="layers-menu" hidden>
+      <div class="chips" id="layers"></div>
+    </div>
     <div class="menu menu-parts" id="parts-menu" hidden>
-      <input id="search" type="search" placeholder="Search parts…" autocomplete="off" />
+      <input
+        id="search"
+        type="search"
+        placeholder="Search parts…"
+        autocomplete="off"
+      />
       <div id="part-list"></div>
       <div class="group-title">Who designs it</div>
       <ul class="legend" id="legend"></ul>
@@ -51,7 +87,10 @@
         <summary>Key numbers for 2026</summary>
         <dl id="overview-list"></dl>
       </details>
-      <p class="fine">A simplified, non-team-specific interpretation of the FIA 2026 F1 Technical &amp; Sporting Regulations. Figures are representative.</p>
+      <p class="fine">
+        A simplified, non-team-specific interpretation of the FIA 2026 F1
+        Technical &amp; Sporting Regulations. Figures are representative.
+      </p>
     </div>
 
     <nav id="bottombar" class="bar">
@@ -65,18 +104,30 @@
       </div>
       <span class="sep"></span>
       <div class="group">
-        <button id="view-mode" title="Colour parts by who designs them"><span class="long">Rule colours</span><span class="short">Colours</span></button>
+        <button id="view-mode" title="Colour parts by who designs them">
+          <span class="long">Rule colours</span
+          ><span class="short">Colours</span>
+        </button>
         <button id="xray">X-ray</button>
-        <button id="dims"><span class="long">Dimensions</span><span class="short">Dims</span></button>
-        <button id="spin"><span class="long">Turntable</span><span class="short">Spin</span></button>
-        <button id="compound" title="Tyre compound"><i></i><span class="names"></span></button>
+        <button id="dims">
+          <span class="long">Dimensions</span><span class="short">Dims</span>
+        </button>
+        <button id="spin">
+          <span class="long">Turntable</span><span class="short">Spin</span>
+        </button>
+        <button id="compound" title="Tyre compound">
+          <i></i><span class="names"></span>
+        </button>
         <button id="paint" title="Paint colour"><i></i></button>
       </div>
     </nav>
 
     <div id="card" class="card" role="dialog" aria-live="polite" hidden></div>
 
-    <div id="loading"><div class="spinner"></div><span>Assembling car…</span></div>
+    <div id="loading">
+      <div class="spinner"></div>
+      <span>ASSEMBLING CAR…</span>
+    </div>
 
     <script type="module" src="/src/main.js"></script>
   </body>

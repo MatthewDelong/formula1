@@ -85,10 +85,10 @@ export class Callout {
 
   render(info, pinned) {
     const cat = CATEGORIES[info.cat];
-    this.path.style.stroke = 'rgba(238, 236, 233, 0.7)';
-    this.dot.style.fill = '#131212';
-    this.dot.style.stroke = '#eeece9';
-    this.ring.style.stroke = '#eeece9';
+    this.path.style.stroke = 'rgba(59, 130, 246, 0.5)';
+    this.dot.style.fill = '#050508';
+    this.dot.style.stroke = '#60a5fa';
+    this.ring.style.stroke = '#3b82f6';
     const bars = [0, 1, 2, 3].map((i) => `<span class="${i < info.freedom ? 'on' : ''}"></span>`).join('');
     this.card.innerHTML = `
       <div class="cat-row">

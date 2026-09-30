@@ -13,7 +13,7 @@ import { VerticalBlurShader } from 'three/examples/jsm/shaders/VerticalBlurShade
  *   - a faint, blurred floor reflection.
  */
 
-export const STUDIO_BG = 0x080808;
+export const STUDIO_BG = 0x000000;
 
 /* ------------------------------------------------------------------ */
 /* Environment: black room with a few soft boxes                       */
@@ -25,13 +25,13 @@ function studioEnvironment(renderer) {
   const box = new THREE.BoxGeometry(1, 1, 1);
 
   // dark room so reflections of "nothing" stay deep
-  const room = new THREE.Mesh(box, new THREE.MeshBasicMaterial({ color: 0x060505, side: THREE.BackSide }));
+  const room = new THREE.Mesh(box, new THREE.MeshBasicMaterial({ color: 0x020204, side: THREE.BackSide }));
   room.scale.set(30, 14, 30);
   room.position.y = 6;
   env.add(room);
 
   // dim floor, so lower surfaces pick up a hint of ground bounce
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x181715) }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x0c0c10) }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.99;
   env.add(ground);
@@ -178,7 +178,7 @@ function createFloor(contact, bg) {
     uBg: { value: new THREE.Color(bg) },
     uFade: { value: new THREE.Vector2(2.6, 8.5) },
   };
-  const mat = new THREE.MeshStandardMaterial({ color: 0x2e2d2a, roughness: 0.72, metalness: 0.0, envMapIntensity: 0.05 });
+  const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a20, roughness: 0.72, metalness: 0.0, envMapIntensity: 0.05 });
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader

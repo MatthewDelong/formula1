@@ -236,7 +236,7 @@ function sidewallTextTexture() {
 // Plain, deep matte paint (undersides are bare carbon). The primary colour
 // defaults to dark red and can be swapped at runtime with setLiveryColor().
 export const LIVERY_COLORS = [
-  ["Red", "#4a0710"],
+  ["Light Blue", "#02a9fd"],
   ["Blue", "#0e1f42"],
   ["Green", "#10301f"],
   ["Pink", "#55163a"],
@@ -280,38 +280,16 @@ function makeLiveryMaterial() {
          varying vec3 vLivPos;
          uniform vec3 uPrimary; uniform vec3 uDark;
          
-         // Helper to draw some geometric circuit-like lines
-         float circuitPattern(vec2 uv) {
-           vec2 p = fract(uv * 10.0) - 0.5;
-           float d = length(p);
-           return smoothstep(0.4, 0.45, d) * smoothstep(0.5, 0.45, d);
-         }
-
          vec3 liveryColor(vec3 p, vec3 n) {
-           // F1-Telemetry colors
-           vec3 telemetryBlue = vec3(0.01, 0.15, 0.65); // Deep bright blue
-           vec3 telemetryWhite = vec3(0.95, 0.95, 0.95);
-           vec3 telemetryLightBlue = vec3(0.2, 0.4, 0.9);
+           vec3 col = uPrimary; // The rest of the car is light blue
            
-           vec3 col = telemetryBlue; // Base color is blue
-
-           // White nose top and central spine
-           // We use a smoothed absolute z to define the central white band
-           float spineWidth = 0.15 + smoothstep(1.5, 0.0, p.x) * 0.1; // wider near cockpit
-           if (abs(p.z) < spineWidth && p.y > 0.25) {
-             col = telemetryWhite;
-           }
+           vec3 white = vec3(0.98, 0.98, 0.98);
            
-           // Geometric sweep on the engine cover and sidepods
-           float sweep = p.x + abs(p.z) * 1.5;
-           if (sweep > -0.5 && sweep < 0.5 && p.y > 0.3) {
-             col = telemetryWhite;
-           }
-
-           // Add some "circuit" texture details to the blue areas (sidepods)
-           if (col == telemetryBlue && p.y > 0.2 && p.x < 1.0 && p.x > -1.0) {
-              float circuit = circuitPattern(vec2(p.x, p.z + p.y));
-              col = mix(col, telemetryLightBlue, circuit * 0.3);
+           // Make ONLY the airbox (intake scoop above driver's head) white
+           // p.x ranges from 0.2 (front of airbox) to -0.6 (back of airbox)
+           // p.y > 0.55 restricts it entirely above the sidepods and engine cover base
+           if (p.x < 0.2 && p.x > -0.6 && p.y > 0.55 && abs(p.z) < 0.18) {
+             col = white;
            }
 
            // downward-facing undersides are left as dark bare carbon

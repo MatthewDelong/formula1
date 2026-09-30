@@ -1,29 +1,32 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
-import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { OutlinePass } from "three/examples/jsm/postprocessing/OutlinePass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 
-import { buildCar } from './car/build.js';
-import { setLiveryColor } from './car/materials.js';
-import { TYRE_SQUASH } from './car/dims.js';
-import { PARTS, CATEGORIES, LAYERS } from './data/parts.js';
-import { createDimensions } from './dimensions.js';
-import { createStudio } from './studio.js';
-import { Callout } from './ui/callout.js';
-import { initUI } from './ui/panels.js';
+import { buildCar } from "./car/build.js";
+import { setLiveryColor } from "./car/materials.js";
+import { TYRE_SQUASH } from "./car/dims.js";
+import { PARTS, CATEGORIES, LAYERS } from "./data/parts.js";
+import { createDimensions } from "./dimensions.js";
+import { createStudio } from "./studio.js";
+import { Callout } from "./ui/callout.js";
+import { initUI } from "./ui/panels.js";
 
 /* ------------------------------------------------------------------ */
 /* Renderer, scene, camera                                            */
 /* ------------------------------------------------------------------ */
 
-const stage = document.getElementById('stage');
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: "high-performance",
+});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -36,17 +39,28 @@ renderer.shadowMap.autoUpdate = false;
 renderer.shadowMap.needsUpdate = true;
 stage.appendChild(renderer.domElement);
 
-const labelRenderer = new CSS2DRenderer({ element: document.getElementById('labels') });
+const labelRenderer = new CSS2DRenderer({
+  element: document.getElementById("labels"),
+});
 labelRenderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
 const studio = createStudio(renderer, scene);
 
-const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 0.05, 100);
+const camera = new THREE.PerspectiveCamera(
+  32,
+  window.innerWidth / window.innerHeight,
+  0.05,
+  100,
+);
 camera.position.set(5.6, 2.3, 5.2);
 {
   const a = window.innerWidth / window.innerHeight;
-  if (a < 1.3) camera.position.sub(new THREE.Vector3(0, 0.4, 0)).multiplyScalar(Math.min(3.2, Math.max(1, 1.2 / a))).add(new THREE.Vector3(0, 0.4, 0));
+  if (a < 1.3)
+    camera.position
+      .sub(new THREE.Vector3(0, 0.4, 0))
+      .multiplyScalar(Math.min(3.2, Math.max(1, 1.2 / a)))
+      .add(new THREE.Vector3(0, 0.4, 0));
 }
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -77,7 +91,8 @@ for (const p of parts) {
   p.userData.size = box.getSize(new THREE.Vector3()).length();
   p.userData.baseScale = p.scale.clone();
   const e = p.userData.explode;
-  p.userData.hideDir = e.lengthSq() > 0 ? e.clone().normalize() : new THREE.Vector3(0, 1, 0);
+  p.userData.hideDir =
+    e.lengthSq() > 0 ? e.clone().normalize() : new THREE.Vector3(0, 1, 0);
 }
 
 // Group parts by rules card
@@ -95,7 +110,10 @@ dims.group.visible = false;
 /* Post-processing                                                    */
 /* ------------------------------------------------------------------ */
 
-const rt = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { samples: 4, type: THREE.HalfFloatType });
+const rt = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+  samples: 4,
+  type: THREE.HalfFloatType,
+});
 const composer = new EffectComposer(renderer, rt);
 composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 composer.addPass(new RenderPass(scene, camera));
@@ -107,24 +125,49 @@ gtao.normalMaterial.side = THREE.DoubleSide;
 // quarter of the cost); the blend step upsamples it over the full-res image
 const GTAO_SCALE = 0.5;
 const gtaoSetSize = gtao.setSize.bind(gtao);
-gtao.setSize = (w, h) => gtaoSetSize(Math.max(1, Math.round(w * GTAO_SCALE)), Math.max(1, Math.round(h * GTAO_SCALE)));
-gtao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 1, scale: 1.2, samples: 16 });
-gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+gtao.setSize = (w, h) =>
+  gtaoSetSize(
+    Math.max(1, Math.round(w * GTAO_SCALE)),
+    Math.max(1, Math.round(h * GTAO_SCALE)),
+  );
+gtao.updateGtaoMaterial({
+  radius: 0.35,
+  distanceExponent: 1.5,
+  thickness: 1,
+  scale: 1.2,
+  samples: 16,
+});
+gtao.updatePdMaterial({
+  lumaPhi: 10,
+  depthPhi: 2,
+  normalPhi: 3,
+  radius: 6,
+  rings: 2,
+  samples: 16,
+});
 gtao.blendIntensity = 0.9;
-gtao.enabled = !window.matchMedia('(pointer: coarse)').matches; // too heavy for most phones
+gtao.enabled = !window.matchMedia("(pointer: coarse)").matches; // too heavy for most phones
 composer.addPass(gtao);
-const outline = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera);
+const outline = new OutlinePass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  scene,
+  camera,
+);
 outline.edgeStrength = 5;
 outline.edgeGlow = 0.6;
 outline.edgeThickness = 1.6;
-outline.visibleEdgeColor.set('#ffffff');
-outline.hiddenEdgeColor.set('#444444');
+outline.visibleEdgeColor.set('#60a5fa');
+outline.hiddenEdgeColor.set('#1e3a5f');
 composer.addPass(outline);
 composer.addPass(new OutputPass());
 // final grade in display space: gentle vignette + dithering to hide banding in the dark falloff
 const grade = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, uAspect: { value: window.innerWidth / window.innerHeight } },
-  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  uniforms: {
+    tDiffuse: { value: null },
+    uAspect: { value: window.innerWidth / window.innerHeight },
+  },
+  vertexShader:
+    "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float uAspect; varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -147,7 +190,7 @@ const state = {
   explode: 0,
   explodeTarget: 0,
   layers: Object.fromEntries(LAYERS.map((l) => [l.id, true])),
-  view: 'real',
+  view: "real",
   xray: false,
   frame: false, // ghost the painted chassis shells so the internals show through
   aeroT: 0,
@@ -200,7 +243,8 @@ function highlighted(mat, color) {
     if (h.emissive) {
       h.emissive = new THREE.Color(color);
       // a neutral (white) glow reads much brighter than a category colour, so keep it subtle
-      h.emissiveIntensity = mat === ghostMat ? 0.6 : color === '#ffffff' ? 0.08 : 0.28;
+      h.emissiveIntensity =
+        mat === ghostMat ? 0.6 : color === "#ffffff" ? 0.08 : 0.28;
     }
     if (mat === ghostMat) h.opacity = 0.35;
     hiCache.set(k, h);
@@ -209,7 +253,10 @@ function highlighted(mat, color) {
 }
 
 function isGhost(p) {
-  return p.userData.xray && (state.xray || (state.frame && p.userData.layer === 'chassis'));
+  return (
+    p.userData.xray &&
+    (state.xray || (state.frame && p.userData.layer === "chassis"))
+  );
 }
 
 function refreshMaterials() {
@@ -218,24 +265,43 @@ function refreshMaterials() {
   if (state.pinned) hotInfo.add(state.pinned);
   for (const p of parts) {
     const info = PARTS[p.userData.infoId];
-    const cat = info?.cat ?? 'LTC';
+    const cat = info?.cat ?? "LTC";
     const ghost = isGhost(p);
-    const hot = hotInfo.has(p.userData.infoId) || (state.categoryHover && state.categoryHover === cat);
+    const hot =
+      hotInfo.has(p.userData.infoId) ||
+      (state.categoryHover && state.categoryHover === cat);
     p.traverse((o) => {
       if (!o.isMesh) return;
       let m = o.userData.baseMaterial;
-      if (state.view === 'category' && !m.emissiveMap && !(m.emissiveIntensity > 1)) m = catMats[cat];
+      if (
+        state.view === "category" &&
+        !m.emissiveMap &&
+        !(m.emissiveIntensity > 1)
+      )
+        m = catMats[cat];
       if (ghost) m = ghostMat;
-      if (hot) m = highlighted(m, state.view === 'category' || state.categoryHover ? CATEGORIES[cat].color : '#ffffff');
+      if (hot)
+        m = highlighted(
+          m,
+          state.view === "category" || state.categoryHover
+            ? CATEGORIES[cat].color
+            : "#ffffff",
+        );
       o.material = m;
       o.castShadow = !ghost;
     });
   }
   const sel = [];
-  for (const id of hotInfo) for (const p of byInfo.get(id) ?? []) if (p.visible) sel.push(p);
-  if (state.categoryHover) for (const p of parts) if (PARTS[p.userData.infoId]?.cat === state.categoryHover && p.visible) sel.push(p);
+  for (const id of hotInfo)
+    for (const p of byInfo.get(id) ?? []) if (p.visible) sel.push(p);
+  if (state.categoryHover)
+    for (const p of parts)
+      if (PARTS[p.userData.infoId]?.cat === state.categoryHover && p.visible)
+        sel.push(p);
   outline.selectedObjects = sel;
-  outline.visibleEdgeColor.set(state.categoryHover ? CATEGORIES[state.categoryHover].color : '#ffffff');
+  outline.visibleEdgeColor.set(
+    state.categoryHover ? CATEGORIES[state.categoryHover].color : '#60a5fa',
+  );
   studio.floor.invalidate();
   renderer.shadowMap.needsUpdate = true; // x-ray toggles shadow casting
   requestRender();
@@ -251,21 +317,21 @@ let pointerInside = false;
 let pointerDirty = false;
 let downPos = null;
 
-renderer.domElement.addEventListener('pointermove', (e) => {
-  if (e.pointerType !== 'mouse') return; // touch: no hover, a tap pins instead
+renderer.domElement.addEventListener("pointermove", (e) => {
+  if (e.pointerType !== "mouse") return; // touch: no hover, a tap pins instead
   pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
   pointerInside = true;
   pointerDirty = true;
 });
-renderer.domElement.addEventListener('pointerleave', () => {
+renderer.domElement.addEventListener("pointerleave", () => {
   pointerInside = false;
   setHover(null);
 });
-renderer.domElement.addEventListener('pointerdown', (e) => {
+renderer.domElement.addEventListener("pointerdown", (e) => {
   downPos = [e.clientX, e.clientY];
 });
-renderer.domElement.addEventListener('pointerup', (e) => {
+renderer.domElement.addEventListener("pointerup", (e) => {
   if (!downPos) return;
   const moved = Math.hypot(e.clientX - downPos[0], e.clientY - downPos[1]);
   downPos = null;
@@ -292,8 +358,8 @@ function pick() {
 }
 
 const callout = new Callout({
-  card: document.getElementById('card'),
-  svg: document.getElementById('callout-svg'),
+  card: document.getElementById("card"),
+  svg: document.getElementById("callout-svg"),
   camera,
   renderer,
   onClose: () => unpin(),
@@ -305,7 +371,7 @@ function setHover(part, point) {
   state.hover = part;
   if (changed || info !== state.hoverInfo) {
     state.hoverInfo = info;
-    stage.classList.toggle('hovering', !!part);
+    stage.classList.toggle("hovering", !!part);
     refreshMaterials();
     ui.markHot(info);
   }
@@ -331,8 +397,8 @@ function unpin() {
   ui.markSelected(null);
 }
 
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') unpin();
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") unpin();
 });
 
 /* ------------------------------------------------------------------ */
@@ -356,7 +422,11 @@ function aspectScale() {
 }
 function framed(pos, target) {
   const t = new THREE.Vector3(...target);
-  return new THREE.Vector3(...pos).sub(t).multiplyScalar(aspectScale()).add(t).toArray();
+  return new THREE.Vector3(...pos)
+    .sub(t)
+    .multiplyScalar(aspectScale())
+    .add(t)
+    .toArray();
 }
 /** Animate the camera; `below` lets it (and the user) orbit under the floor. */
 /**
@@ -373,7 +443,9 @@ function explodeCentre(e, out) {
     if (!state.layers[u.layer]) continue;
     const d = u.delay * 0.5;
     const t = ease(THREE.MathUtils.clamp((e - d) / (1 - d), 0, 1));
-    _cb.union(_pb.copy(u.bounds).translate(_eo.copy(u.explode).multiplyScalar(t)));
+    _cb.union(
+      _pb.copy(u.bounds).translate(_eo.copy(u.explode).multiplyScalar(t)),
+    );
   }
   _cb.getCenter(out);
   out.y += ease(Math.min(1, e * 1.6)) * 1.0; // the whole car lifts as it explodes
@@ -387,7 +459,13 @@ function explodeOffset(e) {
 function pose({ pos, target }) {
   const off = explodeOffset(state.explode).toArray();
   const t = target.map((v, i) => v + off[i]);
-  return [framed(pos.map((v, i) => v + off[i]), t), t];
+  return [
+    framed(
+      pos.map((v, i) => v + off[i]),
+      t,
+    ),
+    t,
+  ];
 }
 
 function flyTo(pos, target, dur = 1.0, below = false) {
@@ -404,7 +482,10 @@ function flyTo(pos, target, dur = 1.0, below = false) {
     t1,
     // swing around the target instead of cutting straight through the car
     d0: o0.clone().normalize(),
-    rot: new THREE.Quaternion().setFromUnitVectors(o0.clone().normalize(), o1.clone().normalize()),
+    rot: new THREE.Quaternion().setFromUnitVectors(
+      o0.clone().normalize(),
+      o1.clone().normalize(),
+    ),
     r0: o0.length(),
     r1: o1.length(),
   };
@@ -456,7 +537,7 @@ function surfacePoint(part, viewPos) {
 
 const PRESETS = {
   assembled: { explode: 0, off: [] },
-  shell: { explode: 0, off: ['body'], frame: true },
+  shell: { explode: 0, off: ["body"], frame: true },
   exploded: { explode: 1, off: [] },
 };
 
@@ -475,7 +556,7 @@ const ui = initUI({
     state.frame = !!p.frame;
     ui.sync();
     refreshMaterials();
-    if (name === 'exploded') flyTo(...pose(CAMS.exploded), 1.2);
+    if (name === "exploded") flyTo(...pose(CAMS.exploded), 1.2);
     else if (state.explode > 0.5) flyTo(...pose(CAMS.hero), 1.2);
   },
   onView(v) {
@@ -508,7 +589,7 @@ const ui = initUI({
     studio.floor.invalidate();
   },
   onCam(name) {
-    flyTo(...pose(CAMS[name]), 1.0, name === 'under');
+    flyTo(...pose(CAMS[name]), 1.0, name === "under");
   },
   onPick(infoId) {
     const group = byInfo.get(infoId);
@@ -519,7 +600,8 @@ const ui = initUI({
       state.layers[layer] = true;
       ui.sync();
       // snap the layer back in so the callout anchor is computed at full scale
-      for (const p of parts) if (p.userData.layer === layer) p.userData.hideT = 0;
+      for (const p of parts)
+        if (p.userData.layer === layer) p.userData.hideT = 0;
       update(0);
     }
     // turn x-ray off for the picked part's own layer so it's visible
@@ -531,8 +613,16 @@ const ui = initUI({
     const camPos = flyToPart(infoId);
     // prefer the instance nearest the camera (e.g. the near-side tyre)
     const part = group.reduce((a, b) =>
-      new THREE.Box3().setFromObject(a).getCenter(new THREE.Vector3()).distanceTo(camPos) <=
-      new THREE.Box3().setFromObject(b).getCenter(new THREE.Vector3()).distanceTo(camPos) ? a : b,
+      new THREE.Box3()
+        .setFromObject(a)
+        .getCenter(new THREE.Vector3())
+        .distanceTo(camPos) <=
+      new THREE.Box3()
+        .setFromObject(b)
+        .getCenter(new THREE.Vector3())
+        .distanceTo(camPos)
+        ? a
+        : b,
     );
     pin(part, surfacePoint(part, camPos));
   },
@@ -544,7 +634,12 @@ const ui = initUI({
     state.categoryHover = cat;
     refreshMaterials();
   },
-  counts: Object.fromEntries(Object.keys(CATEGORIES).map((k) => [k, Object.values(PARTS).filter((p) => p.cat === k).length])),
+  counts: Object.fromEntries(
+    Object.keys(CATEGORIES).map((k) => [
+      k,
+      Object.values(PARTS).filter((p) => p.cat === k).length,
+    ]),
+  ),
 });
 
 /* ------------------------------------------------------------------ */
@@ -584,7 +679,8 @@ function update(dt) {
   const k = 1 - Math.exp(-dt * 3.2);
   const prevExplode = state.explode;
   state.explode += (state.explodeTarget - state.explode) * k;
-  if (Math.abs(state.explode - state.explodeTarget) < 1e-4) state.explode = state.explodeTarget;
+  if (Math.abs(state.explode - state.explodeTarget) < 1e-4)
+    state.explode = state.explodeTarget;
   if (state.explode !== prevExplode) followExplode(prevExplode, state.explode);
   const lift = ease(Math.min(1, state.explode * 1.6)) * 1.0;
   car.position.y = lift - TYRE_SQUASH;
@@ -610,10 +706,15 @@ function update(dt) {
 
   // active aero
   state.aeroT += (state.aeroTarget - state.aeroT) * (1 - Math.exp(-dt * 6));
-  if (Math.abs(state.aeroT - state.aeroTarget) < 1e-4) state.aeroT = state.aeroTarget;
+  if (Math.abs(state.aeroT - state.aeroTarget) < 1e-4)
+    state.aeroT = state.aeroTarget;
   const a = ease(state.aeroT);
-  aero.frontWing.flapPivots.forEach((pv, i) => (pv.rotation.z = a * aero.frontWing.flapAngles[i]));
-  aero.rearWing.flapPivots.forEach((pv, i) => (pv.rotation.z = a * aero.rearWing.flapAngles[i]));
+  aero.frontWing.flapPivots.forEach(
+    (pv, i) => (pv.rotation.z = a * aero.frontWing.flapAngles[i]),
+  );
+  aero.rearWing.flapPivots.forEach(
+    (pv, i) => (pv.rotation.z = a * aero.rearWing.flapAngles[i]),
+  );
 
   // refresh contact shadows / floor reflection only while the car is changing
   let sig = state.explode * 7.1 + state.aeroT * 3.3;
@@ -631,8 +732,12 @@ function update(dt) {
     const e = ease(Math.min(1, camTween.t));
     const { t0, t1, d0, rot, r0, r1 } = camTween;
     controls.target.lerpVectors(t0, t1, e);
-    const dir = d0.clone().applyQuaternion(new THREE.Quaternion().slerp(rot, e));
-    camera.position.copy(controls.target).addScaledVector(dir, THREE.MathUtils.lerp(r0, r1, e));
+    const dir = d0
+      .clone()
+      .applyQuaternion(new THREE.Quaternion().slerp(rot, e));
+    camera.position
+      .copy(controls.target)
+      .addScaledVector(dir, THREE.MathUtils.lerp(r0, r1, e));
     if (camTween.t >= 1) {
       if (!camTween.below) controls.maxPolarAngle = MAX_POLAR;
       camTween = null;
@@ -660,8 +765,11 @@ function update(dt) {
   if (!pointerInside) pointerDirty = false;
 
   // phones dock the card at the bottom: slide the view up so the pinned part stays visible
-  const card = document.getElementById('card');
-  const wantShift = window.innerWidth < 600 && state.pinned ? Math.min(card.offsetHeight * 0.5, window.innerHeight * 0.25) : 0;
+  const card = document.getElementById("card");
+  const wantShift =
+    window.innerWidth < 600 && state.pinned
+      ? Math.min(card.offsetHeight * 0.5, window.innerHeight * 0.25)
+      : 0;
   if (Math.abs(wantShift - viewShift) > 0.5) {
     viewShift += (wantShift - viewShift) * (1 - Math.exp(-dt * 8));
     const w = window.innerWidth;
@@ -699,7 +807,7 @@ function loop(now) {
   }
 }
 
-window.addEventListener('resize', () => {
+window.addEventListener("resize", () => {
   const w = window.innerWidth;
   const h = window.innerHeight;
   camera.aspect = w / h;
@@ -714,24 +822,34 @@ window.addEventListener('resize', () => {
 });
 
 // Mark picks from camera orbit changes as dirty so the hover target stays accurate
-controls.addEventListener('change', () => {
+controls.addEventListener("change", () => {
   pointerDirty = true;
   requestRender();
 });
 // any UI interaction (compound, toggles…) may change the picture
-for (const type of ['input', 'change', 'click', 'keydown']) document.addEventListener(type, () => requestRender(2), true);
+for (const type of ["input", "change", "click", "keydown"])
+  document.addEventListener(type, () => requestRender(2), true);
 // canvas textures (tyre lettering, race numbers) redraw once the web fonts load
 document.fonts?.ready.then(() => requestRender());
 
 refreshMaterials();
 requestAnimationFrame((now) => {
   loop(now);
-  document.getElementById('loading').classList.add('done');
+  document.getElementById("loading").classList.add("done");
 });
 
 // handy for debugging in the console
 window.__f1 = {
-  THREE, scene, car, reg, state, camera, controls, studio, renderer, composer,
+  THREE,
+  scene,
+  car,
+  reg,
+  state,
+  camera,
+  controls,
+  studio,
+  renderer,
+  composer,
   // advance the simulation deterministically (useful when rAF is throttled)
   explodeOffset,
   advance(seconds = 1) {
@@ -743,7 +861,12 @@ window.__f1 = {
     let liveryMat = null;
 
     car.traverse((o) => {
-      if (o.isMesh && o.material && o.material.userData && o.material.userData.livery) {
+      if (
+        o.isMesh &&
+        o.material &&
+        o.material.userData &&
+        o.material.userData.livery
+      ) {
         liveryMat = o.material;
         const pos = o.geometry.attributes.position;
         const norm = o.geometry.attributes.normal;
@@ -763,47 +886,66 @@ window.__f1 = {
           const ny = norm.getY(i);
           const nz = norm.getZ(i);
 
-          let r = 0.01, g = 0.15, b = 0.65; // telemetryBlue
-          
+          let r = 0.01,
+            g = 0.15,
+            b = 0.65; // telemetryBlue
+
           const spineWidth = 0.15 + smoothstep(1.5, 0.0, x) * 0.1;
           if (Math.abs(z) < spineWidth && y > 0.25) {
-            r = 0.95; g = 0.95; b = 0.95;
+            r = 0.95;
+            g = 0.95;
+            b = 0.95;
           }
-          
+
           const sweep = x + Math.abs(z) * 1.5;
           if (sweep > -0.5 && sweep < 0.5 && y > 0.3) {
-            r = 0.95; g = 0.95; b = 0.95;
+            r = 0.95;
+            g = 0.95;
+            b = 0.95;
           }
-          
+
           if (r === 0.01 && y > 0.2 && x < 1.0 && x > -1.0) {
-             let px = (x * 10.0) % 1.0; if (px < 0) px += 1.0; px -= 0.5;
-             let py = ((z + y) * 10.0) % 1.0; if (py < 0) py += 1.0; py -= 0.5;
-             const d = Math.sqrt(px*px + py*py);
-             const circuit = smoothstep(0.4, 0.45, d) * smoothstep(0.5, 0.45, d);
-             const t = circuit * 0.3;
-             r = r * (1 - t) + 0.2 * t; g = g * (1 - t) + 0.4 * t; b = b * (1 - t) + 0.9 * t;
+            let px = (x * 10.0) % 1.0;
+            if (px < 0) px += 1.0;
+            px -= 0.5;
+            let py = ((z + y) * 10.0) % 1.0;
+            if (py < 0) py += 1.0;
+            py -= 0.5;
+            const d = Math.sqrt(px * px + py * py);
+            const circuit = smoothstep(0.4, 0.45, d) * smoothstep(0.5, 0.45, d);
+            const t = circuit * 0.3;
+            r = r * (1 - t) + 0.2 * t;
+            g = g * (1 - t) + 0.4 * t;
+            b = b * (1 - t) + 0.9 * t;
           }
-          
+
           const dark = 1.0 - smoothstep(-0.7, -0.45, ny);
-          const dr = 0.051, dg = 0.043, db = 0.047; // #0d0b0c
+          const dr = 0.051,
+            dg = 0.043,
+            db = 0.047; // #0d0b0c
           r = r * (1 - dark) + dr * dark;
           g = g * (1 - dark) + dg * dark;
           b = b * (1 - dark) + db * dark;
-          
-          const seam = 1.0 - smoothstep(0.0006, 0.0016, Math.abs(x - 1.80));
+
+          const seam = 1.0 - smoothstep(0.0006, 0.0016, Math.abs(x - 1.8));
           const mult = 1.0 - 0.55 * seam;
-          r *= mult; g *= mult; b *= mult;
+          r *= mult;
+          g *= mult;
+          b *= mult;
 
           // convert from linear to srgb for export since GLTF expects sRGB vertex colors
-          colors[i * 3]     = r <= 0.0031308 ? r * 12.92 : 1.055 * Math.pow(r, 1 / 2.4) - 0.055;
-          colors[i * 3 + 1] = g <= 0.0031308 ? g * 12.92 : 1.055 * Math.pow(g, 1 / 2.4) - 0.055;
-          colors[i * 3 + 2] = b <= 0.0031308 ? b * 12.92 : 1.055 * Math.pow(b, 1 / 2.4) - 0.055;
+          colors[i * 3] =
+            r <= 0.0031308 ? r * 12.92 : 1.055 * Math.pow(r, 1 / 2.4) - 0.055;
+          colors[i * 3 + 1] =
+            g <= 0.0031308 ? g * 12.92 : 1.055 * Math.pow(g, 1 / 2.4) - 0.055;
+          colors[i * 3 + 2] =
+            b <= 0.0031308 ? b * 12.92 : 1.055 * Math.pow(b, 1 / 2.4) - 0.055;
         }
 
         if (o.geometry.attributes.color) {
           originalColors.set(o, o.geometry.attributes.color);
         }
-        o.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        o.geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
       }
     });
 
@@ -816,27 +958,32 @@ window.__f1 = {
       (gltf) => {
         // cleanup
         car.traverse((o) => {
-          if (o.isMesh && o.material && o.material.userData && o.material.userData.livery) {
+          if (
+            o.isMesh &&
+            o.material &&
+            o.material.userData &&
+            o.material.userData.livery
+          ) {
             if (originalColors.has(o)) {
-              o.geometry.setAttribute('color', originalColors.get(o));
+              o.geometry.setAttribute("color", originalColors.get(o));
             } else {
-              o.geometry.deleteAttribute('color');
+              o.geometry.deleteAttribute("color");
             }
           }
         });
         if (liveryMat) liveryMat.vertexColors = oldVc;
 
-        const blob = new Blob([gltf], { type: 'application/octet-stream' });
-        const link = document.createElement('a');
-        link.style.display = 'none';
+        const blob = new Blob([gltf], { type: "application/octet-stream" });
+        const link = document.createElement("a");
+        link.style.display = "none";
         link.href = URL.createObjectURL(blob);
-        link.download = 'f1_2026_model.glb';
+        link.download = "f1_2026_model.glb";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
       },
-      (error) => console.error('An error happened during parsing', error),
-      { binary: true }
+      (error) => console.error("An error happened during parsing", error),
+      { binary: true },
     );
-  }
+  },
 };
