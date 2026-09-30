@@ -1,7 +1,7 @@
-import * as THREE from 'three';
-import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
-import { HorizontalBlurShader } from 'three/examples/jsm/shaders/HorizontalBlurShader.js';
-import { VerticalBlurShader } from 'three/examples/jsm/shaders/VerticalBlurShader.js';
+import * as THREE from "three";
+import { Reflector } from "three/examples/jsm/objects/Reflector.js";
+import { HorizontalBlurShader } from "three/examples/jsm/shaders/HorizontalBlurShader.js";
+import { VerticalBlurShader } from "three/examples/jsm/shaders/VerticalBlurShader.js";
 
 /*
  * A dark photographic "infinity" studio: the car sits on a satin floor that
@@ -13,7 +13,7 @@ import { VerticalBlurShader } from 'three/examples/jsm/shaders/VerticalBlurShade
  *   - a faint, blurred floor reflection.
  */
 
-export const STUDIO_BG = 0x000000;
+export const STUDIO_BG = 0x3a3d46;
 
 /* ------------------------------------------------------------------ */
 /* Environment: black room with a few soft boxes                       */
@@ -21,17 +21,23 @@ export const STUDIO_BG = 0x000000;
 
 function studioEnvironment(renderer) {
   const env = new THREE.Scene();
-  env.background = new THREE.Color(0x000000);
+
   const box = new THREE.BoxGeometry(1, 1, 1);
 
   // dark room so reflections of "nothing" stay deep
-  const room = new THREE.Mesh(box, new THREE.MeshBasicMaterial({ color: 0x020204, side: THREE.BackSide }));
+  const room = new THREE.Mesh(
+    box,
+    new THREE.MeshBasicMaterial({ color: 0x22242b, side: THREE.BackSide }),
+  );
   room.scale.set(30, 14, 30);
   room.position.y = 6;
   env.add(room);
 
   // dim floor, so lower surfaces pick up a hint of ground bounce
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x0c0c10) }));
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(30, 30),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0x121218) }),
+  );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.99;
   env.add(ground);
@@ -39,7 +45,10 @@ function studioEnvironment(renderer) {
   const softbox = (w, h, intensity, pos, lookAt, tint = 0xffffff) => {
     const m = new THREE.Mesh(
       new THREE.PlaneGeometry(w, h),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(tint).multiplyScalar(intensity), side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({
+        color: new THREE.Color(tint).multiplyScalar(intensity),
+        side: THREE.DoubleSide,
+      }),
     );
     m.position.set(...pos);
     m.lookAt(new THREE.Vector3(...lookAt));
@@ -64,7 +73,10 @@ function studioEnvironment(renderer) {
 /* Contact shadows (depth from below, blurred)                         */
 /* ------------------------------------------------------------------ */
 
-function createContactShadows(renderer, { width = 7.2, depth = 3.6, height = 1.2, res = 1024, blur = 1.6 } = {}) {
+function createContactShadows(
+  renderer,
+  { width = 7.2, depth = 3.6, height = 1.2, res = 1024, blur = 1.6 } = {},
+) {
   const rtOpts = { type: THREE.HalfFloatType };
   const resY = Math.round((res * depth) / width);
   const rt = new THREE.WebGLRenderTarget(res, resY, rtOpts);
@@ -72,7 +84,14 @@ function createContactShadows(renderer, { width = 7.2, depth = 3.6, height = 1.2
   rt.texture.generateMipmaps = rtBlur.texture.generateMipmaps = false;
 
   // looks straight up from the floor
-  const cam = new THREE.OrthographicCamera(-width / 2, width / 2, depth / 2, -depth / 2, 0, height);
+  const cam = new THREE.OrthographicCamera(
+    -width / 2,
+    width / 2,
+    depth / 2,
+    -depth / 2,
+    0,
+    height,
+  );
   cam.rotation.x = Math.PI / 2; // screen right = +x, screen up = +z
   cam.updateMatrixWorld();
 
@@ -80,8 +99,8 @@ function createContactShadows(renderer, { width = 7.2, depth = 3.6, height = 1.2
   const depthMat = new THREE.MeshDepthMaterial({ side: THREE.DoubleSide });
   depthMat.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
-      'gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );',
-      'float k = 1.0 - fragCoordZ; gl_FragColor = vec4( vec3( 0.0 ), k * k );',
+      "gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );",
+      "float k = 1.0 - fragCoordZ; gl_FragColor = vec4( vec3( 0.0 ), k * k );",
     );
   };
   depthMat.depthTest = depthMat.depthWrite = false;
@@ -92,7 +111,11 @@ function createContactShadows(renderer, { width = 7.2, depth = 3.6, height = 1.2
   const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
   quadScene.add(quad);
-  const blurMat = (def) => new THREE.ShaderMaterial({ ...def, uniforms: THREE.UniformsUtils.clone(def.uniforms) });
+  const blurMat = (def) =>
+    new THREE.ShaderMaterial({
+      ...def,
+      uniforms: THREE.UniformsUtils.clone(def.uniforms),
+    });
   const hBlur = blurMat(HorizontalBlurShader);
   const vBlur = blurMat(VerticalBlurShader);
   hBlur.depthTest = vBlur.depthTest = false;
@@ -155,10 +178,19 @@ function createContactShadows(renderer, { width = 7.2, depth = 3.6, height = 1.2
 const REFLECTION_SCALE = 0.35;
 
 function createFloor(contact, bg) {
-  const reflRes = Math.min(2048, Math.round(window.innerWidth * Math.min(window.devicePixelRatio, 2) * REFLECTION_SCALE));
+  const reflRes = Math.min(
+    2048,
+    Math.round(
+      window.innerWidth *
+        Math.min(window.devicePixelRatio, 2) *
+        REFLECTION_SCALE,
+    ),
+  );
   const floor = new Reflector(new THREE.CircleGeometry(60, 96), {
     textureWidth: reflRes,
-    textureHeight: Math.round((reflRes * window.innerHeight) / window.innerWidth),
+    textureHeight: Math.round(
+      (reflRes * window.innerHeight) / window.innerWidth,
+    ),
     clipBias: 0.002,
     multisample: 0,
   });
@@ -178,18 +210,26 @@ function createFloor(contact, bg) {
     uBg: { value: new THREE.Color(bg) },
     uFade: { value: new THREE.Vector2(2.6, 8.5) },
   };
-  const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a20, roughness: 0.72, metalness: 0.0, envMapIntensity: 0.05 });
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x1a1a20,
+    roughness: 0.72,
+    metalness: 0.0,
+    envMapIntensity: 0.05,
+  });
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform mat4 uTexMatrix;\nvarying vec4 vReflUv;\nvarying vec3 vFloorPos;')
       .replace(
-        '#include <begin_vertex>',
-        '#include <begin_vertex>\nvReflUv = uTexMatrix * vec4( position, 1.0 );\nvFloorPos = ( modelMatrix * vec4( position, 1.0 ) ).xyz;',
+        "#include <common>",
+        "#include <common>\nuniform mat4 uTexMatrix;\nvarying vec4 vReflUv;\nvarying vec3 vFloorPos;",
+      )
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvReflUv = uTexMatrix * vec4( position, 1.0 );\nvFloorPos = ( modelMatrix * vec4( position, 1.0 ) ).xyz;",
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
-        '#include <common>',
+        "#include <common>",
         `#include <common>
          uniform sampler2D tRefl; uniform sampler2D tContact;
          uniform vec2 uContactSize; uniform float uContactStrength;
@@ -209,7 +249,7 @@ function createFloor(contact, bg) {
          }`,
       )
       .replace(
-        '#include <opaque_fragment>',
+        "#include <opaque_fragment>",
         `{
            vec2 cuv = vFloorPos.xz / uContactSize + 0.5;
            float inside = step( 0.0, cuv.x ) * step( cuv.x, 1.0 ) * step( 0.0, cuv.y ) * step( cuv.y, 1.0 );
@@ -231,7 +271,7 @@ function createFloor(contact, bg) {
          #include <opaque_fragment>`,
       );
   };
-  mat.customProgramCacheKey = () => 'studio-floor';
+  mat.customProgramCacheKey = () => "studio-floor";
   floor.material = mat;
   floor.uniforms = uniforms;
 
@@ -249,7 +289,10 @@ function createFloor(contact, bg) {
   };
   floor.invalidate = () => (dirty = true);
   floor.resizeReflection = (w, h) => {
-    const rw = Math.min(2048, Math.round(w * Math.min(window.devicePixelRatio, 2) * REFLECTION_SCALE));
+    const rw = Math.min(
+      2048,
+      Math.round(w * Math.min(window.devicePixelRatio, 2) * REFLECTION_SCALE),
+    );
     floor.getRenderTarget().setSize(rw, Math.round((rw * h) / w));
     dirty = true;
   };
@@ -260,7 +303,13 @@ function createFloor(contact, bg) {
 /* Lights                                                             */
 /* ------------------------------------------------------------------ */
 
-function spot(color, intensity, pos, target, { angle = 0.5, penumbra = 1, shadow = false } = {}) {
+function spot(
+  color,
+  intensity,
+  pos,
+  target,
+  { angle = 0.5, penumbra = 1, shadow = false } = {},
+) {
   const l = new THREE.SpotLight(color, intensity, 0, angle, penumbra, 2);
   l.position.set(...pos);
   l.target.position.set(...target);
@@ -285,18 +334,34 @@ export function createStudio(renderer, scene) {
   scene.environmentIntensity = 0.85;
 
   const lights = new THREE.Group();
-  lights.name = 'studio-lights';
+  lights.name = "studio-lights";
   // overhead key: a soft pool of light that only reaches the car
-  const key = spot(0xffffff, 210, [0.6, 8.5, 1.2], [0, 0, 0], { angle: 0.44, penumbra: 0.9, shadow: true });
+  const key = spot(0xffffff, 210, [0.6, 8.5, 1.2], [0, 0, 0], {
+    angle: 0.44,
+    penumbra: 0.9,
+    shadow: true,
+  });
   // rim / kicker lights to separate the silhouette from the void
-  const rimL = spot(0xf4efe8, 120, [-6.5, 3.2, -4.5], [0.2, 0.4, 0], { angle: 0.32, penumbra: 1 });
-  const rimR = spot(0xfff0dc, 70, [5.5, 2.4, 5.5], [0, 0.4, 0], { angle: 0.3, penumbra: 1 });
-  const front = spot(0xffffff, 45, [7.5, 1.4, -2.5], [0.4, 0.35, 0], { angle: 0.3, penumbra: 1 });
+  const rimL = spot(0xf4efe8, 120, [-6.5, 3.2, -4.5], [0.2, 0.4, 0], {
+    angle: 0.32,
+    penumbra: 1,
+  });
+  const rimR = spot(0xfff0dc, 70, [5.5, 2.4, 5.5], [0, 0.4, 0], {
+    angle: 0.3,
+    penumbra: 1,
+  });
+  const front = spot(0xffffff, 45, [7.5, 1.4, -2.5], [0.4, 0.35, 0], {
+    angle: 0.3,
+    penumbra: 1,
+  });
   // underside lights, only lit while the camera is below the floor (kept in the
   // scene at zero intensity so toggling them doesn't recompile materials):
   // an even fill from the ground plus a soft, wide spot for some shape
   const underFill = new THREE.HemisphereLight(0x000000, 0xeae6e0, 0);
-  const under = spot(0xffffff, 0, [2.5, -9, 1.5], [0, 0.3, 0], { angle: 0.9, penumbra: 1 });
+  const under = spot(0xffffff, 0, [2.5, -9, 1.5], [0, 0.3, 0], {
+    angle: 0.9,
+    penumbra: 1,
+  });
   for (const l of [key, rimL, rimR, front, under]) lights.add(l, l.target);
   lights.add(underFill);
   scene.add(lights);
